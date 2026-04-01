@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Agent — AI Assistant for Canvas LMS</title>
+  <meta name="description" content="Connect Claude AI to your Canvas LMS. Manage courses, assignments, grades, and more with natural language.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="hero">
+    <div class="container">
+      <h1>Canvas Agent</h1>
+      <p class="tagline">Connect Claude AI to your Canvas LMS &mdash; manage courses, assignments, and grades just by asking.</p>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <section class="getting-started" id="setup">
+      <h2>Get Started</h2>
+      <p class="section-intro">Four steps to connect Claude to your Canvas courses. The whole process takes about 10 minutes.</p>
+
+      <ol class="steps">
+        <li class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3>Get Claude Pro</h3>
+            <p>Sign up for a <a href="https://claude.ai/pricing" target="_blank" rel="noopener">Claude Pro subscription</a> ($20/month). This gives you access to Claude Code, the tool that powers Canvas Agent.</p>
+            <p class="step-note">If you already have a Claude account, just make sure you're on the Pro plan.</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>Install Node.js</h3>
+            <p>Download and install <a href="https://nodejs.org" target="_blank" rel="noopener">Node.js</a> (click the big green "LTS" button). This is a small program that Canvas Agent needs to run.</p>
+            <p class="step-note">Just download it and click through the installer &mdash; all the default options are fine.</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3>Install Claude Code</h3>
+            <p>Open your terminal and paste this command:</p>
+            <div class="code-block">
+              <code>npm install -g @anthropic-ai/claude-code</code>
+              <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+            </div>
+            <details>
+              <summary>How do I open a terminal?</summary>
+              <div class="details-content">
+                <p><strong>Mac:</strong> Press Cmd+Space to open Spotlight, type <strong>Terminal</strong>, and press Enter.</p>
+                <p><strong>Windows:</strong> Press the Windows key, type <strong>Command Prompt</strong> or <strong>PowerShell</strong>, and press Enter.</p>
+              </div>
+            </details>
+            <p class="step-note">After installing, type <code>claude</code> in your terminal to sign in with your Claude account.</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h3>Run the Setup Wizard</h3>
+            <p>In your terminal, paste this command:</p>
+            <div class="code-block">
+              <code>npx -y canvas-agent setup</code>
+              <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+            </div>
+            <p>The wizard will walk you through connecting your Canvas account. You'll need your school's Canvas web address and a few minutes to generate an access token (the wizard shows you exactly how).</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="after-setup">
+        <h3>You're all set!</h3>
+        <p>Open Claude Code by typing <code>claude</code> in your terminal, and try asking something like:</p>
+        <ul class="example-prompts">
+          <li>"List my Canvas courses"</li>
+          <li>"Show me upcoming assignments for my English class"</li>
+          <li>"Create a discussion board about Chapter 5"</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <h2>What Can Canvas Agent Do?</h2>
+      <p class="section-intro">Canvas Agent gives Claude full access to your Canvas LMS. Here's what you can do with it:</p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>Courses &amp; Modules</h3>
+          <p>View your courses, create and organize modules, and manage course structure.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Assignments</h3>
+          <p>Create, update, and manage assignments. Set due dates, submission types, and point values.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Grading &amp; Rubrics</h3>
+          <p>Grade submissions, create rubrics, and post grades. Review student work with AI assistance.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Discussions &amp; Quizzes</h3>
+          <p>Create discussion boards and quizzes. Supports both Classic and New Quizzes.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Student Management</h3>
+          <p>View enrollments, manage student access, and track submissions and analytics.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Pages, Files &amp; Calendar</h3>
+          <p>Create course pages, upload files, and manage calendar events and scheduling.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq" id="faq">
+      <h2>Frequently Asked Questions</h2>
+
+      <details>
+        <summary>Is my Canvas data safe?</summary>
+        <div class="details-content">
+          <p>Yes. Canvas Agent runs on your own computer, not on a remote server. Your Canvas access token is stored locally in your Claude configuration and is never sent to anyone except Canvas itself. Claude processes your requests, but your credentials stay on your machine.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What does this cost?</summary>
+        <div class="details-content">
+          <p>Canvas Agent itself is <strong>free and open source</strong>. You'll need a Claude Pro subscription ($20/month) to use Claude Code, which is the AI that powers Canvas Agent.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What kind of Canvas account do I need?</summary>
+        <div class="details-content">
+          <p>You need a Canvas account with <strong>teacher</strong> or <strong>admin</strong> access. Student accounts can view courses but can't create or modify content. The access token you generate will have the same permissions as your Canvas account.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Can Claude see my students' data?</summary>
+        <div class="details-content">
+          <p>Claude can access whatever your Canvas account has permission to see. If you can view student submissions and grades in Canvas, Claude can too when using Canvas Agent. This data is processed by Claude to answer your questions but is handled according to <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's privacy policy</a>.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Can Claude accidentally delete my course content?</summary>
+        <div class="details-content">
+          <p>Claude will always ask for your confirmation before making changes. Claude Code shows you exactly what it's about to do and waits for you to approve. You stay in control.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Something went wrong during setup. What do I do?</summary>
+        <div class="details-content">
+          <p>Run the setup wizard again &mdash; it's safe to re-run at any time:</p>
+          <div class="code-block">
+            <code>npx -y canvas-agent setup</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <p>If you're still stuck, <a href="https://github.com/hughsibbele/Canvas-Agent/issues" target="_blank" rel="noopener">open an issue on GitHub</a> and we'll help you out.</p>
+        </div>
+      </details>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>Canvas Agent is <a href="https://github.com/hughsibbele/Canvas-Agent" target="_blank" rel="noopener">open source</a> and free to use.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('.copy-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var code = btn.previousElementSibling.textContent;
+        navigator.clipboard.writeText(code).then(function() {
+          btn.textContent = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(function() {
+            btn.textContent = 'Copy';
+            btn.classList.remove('copied');
+          }, 2000);
+        });
+      });
+    });
+  </script>
+
+</body>
+</html>
