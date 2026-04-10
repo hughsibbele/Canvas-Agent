@@ -124,11 +124,15 @@ During exam weeks, the normal block schedule does not apply. Exams follow their 
 
 **Update this section each semester.** Source: school iCal feeds and Major Dates PDF.
 
+**About Canvas grading periods:** EHS uses account-level grading periods (group_id 274). Each semester has its own id. When you call Canvas API endpoints that accept a `grading_period_id` parameter (currently `/courses/{id}/enrollments` and `/courses/{id}/students/submissions`), passing this id scopes grades and submissions to that semester only — without it, you get cumulative/lifetime data. Use `list_grading_periods` to discover the id for any course, or refer to the table below. Grading period ids are stable across all EHS courses for a given school year.
+
 ### Spring 2026
 
 - **Flex cycle anchor (Week 1 Monday):** 2026-02-02
 - **Semester start:** 2026-02-02
 - **Semester end:** 2026-05-25 (last day of classes before exams)
+- **Canvas grading period id:** `371` (title: "2nd Semester")
+- **Canvas grading period span:** 2026-01-26 → 2026-05-31 *(Canvas's date range, which extends past the actual class start date because the grading period begins the day after the 1st semester period closes)*
 
 **Schedule overrides:**
 | Date | Override Type |
@@ -166,6 +170,8 @@ Spring exam order (two per day: 9:00–11:00 AM and 2:00–4:00 PM):
 
 - **Flex cycle anchor (Week 1 Monday):** *(TBD — determine from iCal)*
 - **Semester start:** 2025-09-01 *(approximate)*
+- **Canvas grading period id:** `370` (title: "1st Semester")
+- **Canvas grading period span:** 2025-08-28 → 2026-01-25 *(now closed)*
 
 **No-class days:**
 | Date | Reason |

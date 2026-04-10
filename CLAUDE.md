@@ -38,6 +38,14 @@ Custom skills are in `.claude/skills/`. Suggest these to users when relevant:
 
 - **`/schedule-assignment`** — EHS block schedule expert. Suggest this when a user asks about setting assignment due dates, due times, the block schedule, flex blocks, or when a class meets. It teaches Claude the full EHS schedule so due dates are set at the correct time for the correct block.
 
+## Canvas API gotchas
+
+A few things worth knowing when adding or updating tools:
+
+- **Grading periods scope grades and submissions to a single semester/term.** Pass `grading_period_id` to `/courses/{id}/enrollments` (returns per-period `current_score`/`current_grade` instead of lifetime) and to `/courses/{id}/students/submissions` (returns only submissions whose assignments are in that period). Without it, you get cumulative data — which is wrong for any year-long course where the second semester resets the gradebook. The `list_grading_periods` tool surfaces the available period ids.
+- **The `/courses/{id}/grading_periods` endpoint returns a wrapped response** — `{"grading_periods": [...], "meta": {...}}` — so `canvasAll` won't flatten it correctly. Use `canvas` and unwrap manually (see `list_grading_periods` in `tools/courses.ts` for the pattern).
+- **The Canvas analytics endpoints (`get_student_summaries`, `get_course_assignment_analytics`, `get_student_assignment_data`) do NOT support `grading_period_id`** — they always return lifetime totals. If you need semester-scoped tardiness or per-assignment data, fetch submissions directly with `grading_period_id` instead of relying on analytics.
+
 ## TODO
 
 ### Must-do

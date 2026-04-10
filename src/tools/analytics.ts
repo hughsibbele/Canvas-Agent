@@ -21,7 +21,7 @@ export function registerAnalyticsTools(server: McpServer) {
 
   server.tool(
     "get_course_assignment_analytics",
-    "Get aggregate statistical analytics per assignment: min/max/median scores, submission counts (on_time, late, missing). This returns statistics, not the assignments themselves — use list_assignments for that.",
+    "Get aggregate statistical analytics per assignment: min/max/median scores, submission counts (on_time, late, missing). This returns statistics, not the assignments themselves — use list_assignments for that. NOTE: this endpoint returns LIFETIME data and does NOT support grading_period_id — for semester-scoped data, fall back to fetching submissions directly via list_submissions.",
     {
       course_id: z.string().describe("Canvas course ID"),
     },
@@ -37,7 +37,7 @@ export function registerAnalyticsTools(server: McpServer) {
 
   server.tool(
     "get_student_summaries",
-    "Get per-student engagement analytics for a course: page views, participations, and tardiness breakdown. For enrollment/roster data, use list_students instead.",
+    "Get per-student engagement analytics for a course: page views, participations, and tardiness breakdown (missing/late/on_time counts). For enrollment/roster data, use list_students instead. NOTE: this endpoint returns LIFETIME data and does NOT support grading_period_id — the tardiness counts include all assignments since the course began, not just the current semester. For per-semester counts, iterate course submissions with a grading_period_id filter.",
     {
       course_id: z.string().describe("Canvas course ID"),
       sort_column: z
@@ -85,7 +85,7 @@ export function registerAnalyticsTools(server: McpServer) {
 
   server.tool(
     "get_student_assignment_data",
-    "Get per-assignment scores, submission status, and timestamps for a specific student. This is analytics data — for actual submission details, use list_submissions.",
+    "Get per-assignment scores, submission status, and timestamps for a specific student. This is analytics data — for actual submission details, use list_submissions. NOTE: this endpoint returns LIFETIME data and does NOT support grading_period_id — it includes assignments from all grading periods.",
     {
       course_id: z.string().describe("Canvas course ID"),
       student_id: z.string().describe("Canvas user ID of the student"),

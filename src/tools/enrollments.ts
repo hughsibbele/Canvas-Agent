@@ -70,15 +70,23 @@ export function registerEnrollmentTools(server: McpServer) {
 
   server.tool(
     "get_student_enrollments",
-    "Get enrollment details for a specific student in a course, including grades if available.",
+    "Get enrollment details for a specific student in a course, including grades if available. Pass grading_period_id to get the grade for a specific semester/term instead of the cumulative lifetime grade — find the id with list_grading_periods.",
     {
       course_id: z.string().describe("Canvas course ID"),
       student_id: z.string().describe("Canvas user ID of the student"),
+      grading_period_id: z
+        .string()
+        .optional()
+        .describe(
+          "Grading period ID to scope grades to a single semester/term. Without this, current_score reflects the entire course history. Use list_grading_periods to discover ids."
+        ),
     },
-    async ({ course_id, student_id }) => {
+    async ({ course_id, student_id, grading_period_id }) => {
+      const params: Record<string, string> = { user_id: student_id };
+      if (grading_period_id) params.grading_period_id = grading_period_id;
       const enrollments = await canvasAll(
         `/courses/${course_id}/enrollments`,
-        { user_id: student_id }
+        params
       );
       return {
         content: [
