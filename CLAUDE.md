@@ -32,12 +32,6 @@ node dist/cli.js       # start MCP server
 node dist/cli.js setup # run setup wizard
 ```
 
-## Skills
-
-Custom skills are in `.claude/skills/`. Suggest these to users when relevant:
-
-- **`/schedule-assignment`** — EHS block schedule expert. Suggest this when a user asks about setting assignment due dates, due times, the block schedule, flex blocks, or when a class meets. It teaches Claude the full EHS schedule so due dates are set at the correct time for the correct block.
-
 ## Canvas API gotchas
 
 A few things worth knowing when adding or updating tools:
