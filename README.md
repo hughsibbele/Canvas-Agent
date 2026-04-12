@@ -2,17 +2,43 @@
 
 MCP server that connects Claude AI to Instructure Canvas LMS. Manage courses, assignments, grades, and more through natural language.
 
-## Quick Setup
+## Setup
 
-Full setup guide: **[hughsibbele.github.io/Canvas-Agent](https://hughsibbele.github.io/Canvas-Agent)**
+**New to the terminal or don't have Node.js yet?** Follow the full step-by-step walkthrough at **[hughsibbele.github.io/Canvas-Agent](https://hughsibbele.github.io/Canvas-Agent)** — it explains every step.
 
-If you already have Claude Code and Node.js installed:
+### Prerequisites
+
+You need these installed before running Canvas Agent:
+
+1. **A Claude Pro subscription** ($20/month) — [sign up at claude.ai/pricing](https://claude.ai/pricing)
+2. **Node.js** — [download the LTS installer from nodejs.org](https://nodejs.org) and click through the defaults.
+3. **Claude Code and/or Claude Desktop** — Canvas Agent works in either, and if you install both the wizard will set up both:
+   - **Claude Code** (terminal-based): in a terminal, run
+     ```bash
+     npm install -g @anthropic-ai/claude-code
+     ```
+     Then type `claude` once to sign in with your Claude account.
+   - **Claude Desktop** (point-and-click app): [download from claude.ai/download](https://claude.ai/download)
+
+### Run the setup wizard
 
 ```bash
 npx -y canvas-agent setup
 ```
 
 The wizard will walk you through connecting your Canvas account.
+
+### Alternative: install via Homebrew (macOS, developers)
+
+If you already use [Homebrew](https://brew.sh) and would rather manage these as casks and formulas, you can replace the prerequisites above with:
+
+```bash
+brew install node
+brew install --cask claude-code   # Claude Code (CLI)
+brew install --cask claude        # Claude Desktop (GUI app)
+```
+
+Skip the ones you don't want — Canvas Agent only needs one of `claude-code` or `claude` to function. Homebrew is entirely optional; the nodejs.org installer path above works without it.
 
 ## What It Does
 
