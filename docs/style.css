@@ -329,6 +329,21 @@ details summary:hover {
   margin-bottom: 0;
 }
 
+/* ── Resource list ── */
+.resource-list {
+  margin: 16px 0;
+  padding-left: 20px;
+}
+
+.resource-list li {
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.resource-list li:last-child {
+  margin-bottom: 0;
+}
+
 /* ── Example prompts ── */
 .example-prompts {
   list-style: none;
