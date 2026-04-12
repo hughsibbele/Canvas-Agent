@@ -18,31 +18,64 @@
 
   <main class="container">
 
+    <!-- ────────────────────────── WHAT YOU NEED ────────────────────────── -->
+
     <section class="getting-started" id="setup">
       <h2>Get Started</h2>
-      <p class="section-intro">Four steps to connect Claude to your Canvas courses. The whole process takes about 10 minutes.</p>
+      <p class="section-intro">The setup takes about 10 minutes. Here's what you'll need before you begin:</p>
+
+      <div class="prereq-list">
+        <div class="prereq">
+          <h3>A Claude account with a paid plan</h3>
+          <p>Canvas Agent runs through Claude, so you need a Claude account. If you don't have one yet, <a href="https://claude.ai/pricing" target="_blank" rel="noopener">sign up at claude.ai</a> and choose a paid plan (Pro, Team, or Enterprise). The free plan does not include the tools Canvas Agent needs.</p>
+        </div>
+        <div class="prereq">
+          <h3>A Canvas account with teacher or admin access</h3>
+          <p>You'll need to be able to log into your school's Canvas and generate an access token. Student accounts can view courses but can't create or modify content.</p>
+        </div>
+        <div class="prereq">
+          <h3>Node.js installed on your computer</h3>
+          <p>Node.js is a small, free program that Canvas Agent needs to run. Download it from <a href="https://nodejs.org" target="_blank" rel="noopener">nodejs.org</a> &mdash; click the big green <strong>"LTS"</strong> button, then run the installer with all the default settings.</p>
+          <details>
+            <summary>How do I know if I already have it?</summary>
+            <div class="details-content">
+              <p>Open a terminal and type <code>node --version</code>. If you see a version number (like <code>v20.11.0</code>), you're good. If you see "command not found," download it from the link above.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ────────────────────────── PICK YOUR PATH ────────────────────────── -->
+
+    <section class="path-section" id="choose">
+      <h2>Choose How You'll Use Claude</h2>
+      <p class="section-intro">Canvas Agent works with either Claude Code or Claude Desktop. Pick whichever you're more comfortable with &mdash; you can always set up the other one later.</p>
+
+      <div class="path-cards">
+        <div class="path-card" id="card-code">
+          <h3>Claude Code</h3>
+          <p class="path-desc">A terminal app. You type commands and Claude responds in text. Lightweight and fast.</p>
+          <p class="path-best-for">Best if you're comfortable typing commands, or if someone technical is helping you set up.</p>
+          <a href="#path-code" class="path-btn">Set up with Claude Code</a>
+        </div>
+        <div class="path-card" id="card-desktop">
+          <h3>Claude Desktop</h3>
+          <p class="path-desc">A regular desktop app with a chat window. Point and click &mdash; feels like a messaging app.</p>
+          <p class="path-best-for">Best if you prefer a familiar app interface and don't want to use the terminal.</p>
+          <a href="#path-desktop" class="path-btn">Set up with Claude Desktop</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ────────────────────── PATH A: CLAUDE CODE ────────────────────── -->
+
+    <section class="path-instructions" id="path-code">
+      <h2>Setup with Claude Code</h2>
 
       <ol class="steps">
         <li class="step">
           <div class="step-number">1</div>
-          <div class="step-content">
-            <h3>Get Claude Pro</h3>
-            <p>Sign up for a <a href="https://claude.ai/pricing" target="_blank" rel="noopener">Claude Pro subscription</a> ($20/month). This gives you access to Claude Code, the tool that powers Canvas Agent.</p>
-            <p class="step-note">If you already have a Claude account, just make sure you're on the Pro plan.</p>
-          </div>
-        </li>
-
-        <li class="step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <h3>Install Node.js</h3>
-            <p>Download and install <a href="https://nodejs.org" target="_blank" rel="noopener">Node.js</a> (click the big green "LTS" button). This is a small program that Canvas Agent needs to run.</p>
-            <p class="step-note">Just download it and click through the installer &mdash; all the default options are fine.</p>
-          </div>
-        </li>
-
-        <li class="step">
-          <div class="step-number">3</div>
           <div class="step-content">
             <h3>Install Claude Code</h3>
             <p>Open your terminal and paste this command:</p>
@@ -53,42 +86,133 @@
             <details>
               <summary>How do I open a terminal?</summary>
               <div class="details-content">
-                <p><strong>Mac:</strong> Press Cmd+Space to open Spotlight, type <strong>Terminal</strong>, and press Enter.</p>
-                <p><strong>Windows:</strong> Press the Windows key, type <strong>Command Prompt</strong> or <strong>PowerShell</strong>, and press Enter.</p>
+                <p><strong>Mac:</strong> Press <kbd>Cmd</kbd>+<kbd>Space</kbd> to open Spotlight, type <strong>Terminal</strong>, and press Enter.</p>
+                <p><strong>Windows:</strong> Press the Windows key, type <strong>PowerShell</strong>, and press Enter.</p>
               </div>
             </details>
-            <p class="step-note">After installing, type <code>claude</code> in your terminal to sign in with your Claude account.</p>
+            <p>You'll see some progress text scroll by. When it finishes and you get your cursor back, Claude Code is installed.</p>
+            <p class="step-note">On Mac, if you use <a href="https://brew.sh" target="_blank" rel="noopener">Homebrew</a>, you can also install with: <code>brew install --cask claude-code</code></p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>Sign into Claude</h3>
+            <p>In the same terminal, type:</p>
+            <div class="code-block">
+              <code>claude</code>
+              <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+            </div>
+            <p>Claude Code will open a browser window asking you to log in with your Claude account. Sign in, then come back to the terminal. You should see a welcome message and a <code>&gt;</code> prompt where you can type messages to Claude.</p>
+            <p>Type <code>/exit</code> to close Claude Code for now &mdash; we'll come back to it in a moment.</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3>Run the Canvas Agent setup wizard</h3>
+            <p>Paste this command into your terminal:</p>
+            <div class="code-block">
+              <code>npx -y canvas-agent setup</code>
+              <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+            </div>
+            <p>The wizard will walk you through three things:</p>
+            <ol class="sub-steps">
+              <li><strong>Your school's Canvas address</strong> &mdash; something like <code>myschool.instructure.com</code>. This is the same URL you use to log into Canvas in your browser. The wizard will verify it's a real Canvas site before continuing.</li>
+              <li><strong>A Canvas access token</strong> &mdash; the wizard will show you exactly where to find this in your Canvas settings and how to generate one. You'll copy a long string of characters and paste it back into the wizard.</li>
+              <li><strong>Where to make Canvas Agent available</strong> &mdash; you can choose "everywhere" (recommended) so Canvas tools are always available, or limit it to a specific folder on your computer.</li>
+            </ol>
+            <p>At the end, the wizard will confirm that everything is connected.</p>
           </div>
         </li>
 
         <li class="step">
           <div class="step-number">4</div>
           <div class="step-content">
-            <h3>Run the Setup Wizard</h3>
-            <p>In your terminal, paste this command:</p>
+            <h3>Start using it</h3>
+            <p>Open Claude Code by typing <code>claude</code> in your terminal, then try asking something like:</p>
+            <ul class="example-prompts">
+              <li>List my Canvas courses</li>
+              <li>Show me upcoming assignments for my English class</li>
+              <li>Create a discussion board about Chapter 5</li>
+            </ul>
+            <p>Claude will ask your permission before making any changes to your Canvas courses. You stay in control.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ────────────────────── PATH B: CLAUDE DESKTOP ────────────────────── -->
+
+    <section class="path-instructions" id="path-desktop">
+      <h2>Setup with Claude Desktop</h2>
+
+      <ol class="steps">
+        <li class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3>Install Claude Desktop</h3>
+            <p>Download the app from <a href="https://claude.ai/download" target="_blank" rel="noopener">claude.ai/download</a> and install it like any other application. Open it and sign in with your Claude account.</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>Run the Canvas Agent setup wizard</h3>
+            <p>Open your terminal and paste this command:</p>
             <div class="code-block">
               <code>npx -y canvas-agent setup</code>
               <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
             </div>
-            <p>The wizard will walk you through connecting your Canvas account. You'll need your school's Canvas web address and a few minutes to generate an access token (the wizard shows you exactly how).</p>
+            <details>
+              <summary>How do I open a terminal?</summary>
+              <div class="details-content">
+                <p><strong>Mac:</strong> Press <kbd>Cmd</kbd>+<kbd>Space</kbd> to open Spotlight, type <strong>Terminal</strong>, and press Enter.</p>
+                <p><strong>Windows:</strong> Press the Windows key, type <strong>PowerShell</strong>, and press Enter.</p>
+              </div>
+            </details>
+            <p>The wizard will walk you through two things:</p>
+            <ol class="sub-steps">
+              <li><strong>Your school's Canvas address</strong> &mdash; something like <code>myschool.instructure.com</code>. This is the same URL you use to log into Canvas in your browser. The wizard will verify it's a real Canvas site before continuing.</li>
+              <li><strong>A Canvas access token</strong> &mdash; the wizard will show you exactly where to find this in your Canvas settings and how to generate one. You'll copy a long string of characters and paste it back into the wizard.</li>
+            </ol>
+            <p>The wizard will detect that you have Claude Desktop installed and configure it automatically.</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3>Restart Claude Desktop</h3>
+            <p>Quit Claude Desktop completely and reopen it. This is needed so it picks up the new Canvas Agent connection.</p>
+            <p class="step-note">On Mac, make sure to <strong>Quit</strong> from the menu bar (not just close the window) &mdash; look for the Claude icon near your clock and right-click to quit.</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h3>Start using it</h3>
+            <p>Open Claude Desktop and try asking something like:</p>
+            <ul class="example-prompts">
+              <li>List my Canvas courses</li>
+              <li>Show me upcoming assignments for my English class</li>
+              <li>Create a discussion board about Chapter 5</li>
+            </ul>
+            <p>Claude will ask your permission before making any changes to your Canvas courses. You stay in control.</p>
           </div>
         </li>
       </ol>
-
-      <div class="after-setup">
-        <h3>You're all set!</h3>
-        <p>Open Claude Code by typing <code>claude</code> in your terminal, and try asking something like:</p>
-        <ul class="example-prompts">
-          <li>"List my Canvas courses"</li>
-          <li>"Show me upcoming assignments for my English class"</li>
-          <li>"Create a discussion board about Chapter 5"</li>
-        </ul>
-      </div>
     </section>
+
+    <!-- ────────────────────────── FEATURES ────────────────────────── -->
 
     <section class="features" id="features">
       <h2>What Can Canvas Agent Do?</h2>
-      <p class="section-intro">Canvas Agent gives Claude full access to your Canvas LMS. Here's what you can do with it:</p>
+      <p class="section-intro">Canvas Agent gives Claude access to your Canvas LMS. Here's what you can do with natural language:</p>
 
       <div class="feature-grid">
         <div class="feature-card">
@@ -109,14 +233,16 @@
         </div>
         <div class="feature-card">
           <h3>Student Management</h3>
-          <p>View enrollments, manage student access, and track submissions and analytics.</p>
+          <p>View enrollments, track submissions, check analytics, and find missing work.</p>
         </div>
         <div class="feature-card">
           <h3>Pages, Files &amp; Calendar</h3>
-          <p>Create course pages, upload files, and manage calendar events and scheduling.</p>
+          <p>Create course pages, manage files and folders, and schedule calendar events.</p>
         </div>
       </div>
     </section>
+
+    <!-- ────────────────────────── FAQ ────────────────────────── -->
 
     <section class="faq" id="faq">
       <h2>Frequently Asked Questions</h2>
@@ -124,14 +250,14 @@
       <details>
         <summary>Is my Canvas data safe?</summary>
         <div class="details-content">
-          <p>Yes. Canvas Agent runs on your own computer, not on a remote server. Your Canvas access token is stored locally in your Claude configuration and is never sent to anyone except Canvas itself. Claude processes your requests, but your credentials stay on your machine.</p>
+          <p>Canvas Agent runs on your own computer, not on a remote server. Your Canvas access token is stored locally in your Claude configuration and is never sent to anyone except Canvas itself. Claude processes your requests according to <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's privacy policy</a>, but your credentials stay on your machine.</p>
         </div>
       </details>
 
       <details>
         <summary>What does this cost?</summary>
         <div class="details-content">
-          <p>Canvas Agent itself is <strong>free and open source</strong>. You'll need a Claude Pro subscription ($20/month) to use Claude Code, which is the AI that powers Canvas Agent.</p>
+          <p>Canvas Agent itself is <strong>free and open source</strong>. You do need a paid Claude plan (Pro, Team, or Enterprise) &mdash; see <a href="https://claude.ai/pricing" target="_blank" rel="noopener">claude.ai/pricing</a> for current prices.</p>
         </div>
       </details>
 
@@ -150,20 +276,46 @@
       </details>
 
       <details>
-        <summary>Can Claude accidentally delete my course content?</summary>
+        <summary>Can Claude accidentally change or delete my course content?</summary>
         <div class="details-content">
-          <p>Claude will always ask for your confirmation before making changes. Claude Code shows you exactly what it's about to do and waits for you to approve. You stay in control.</p>
+          <p>Claude always asks for your confirmation before making changes. Both Claude Code and Claude Desktop show you exactly what Claude is about to do and wait for you to approve it. You stay in control.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Do I need both Claude Code and Claude Desktop?</summary>
+        <div class="details-content">
+          <p>No &mdash; you only need one. Pick whichever you prefer. If you install both, the setup wizard will configure Canvas Agent in both automatically.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>My Canvas token expired. How do I fix it?</summary>
+        <div class="details-content">
+          <p>Canvas access tokens can expire or be revoked by your school's IT department. To fix this, just run the setup wizard again &mdash; it's safe to re-run at any time:</p>
+          <div class="code-block">
+            <code>npx -y canvas-agent setup</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <p>The wizard will walk you through generating a new token and will update your configuration.</p>
         </div>
       </details>
 
       <details>
         <summary>Something went wrong during setup. What do I do?</summary>
         <div class="details-content">
-          <p>Run the setup wizard again &mdash; it's safe to re-run at any time:</p>
+          <p>First, try running the setup wizard again &mdash; it's safe to re-run and will overwrite any previous configuration:</p>
           <div class="code-block">
             <code>npx -y canvas-agent setup</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
+          <p><strong>Common issues:</strong></p>
+          <ul class="troubleshoot-list">
+            <li><strong>"command not found: npx"</strong> &mdash; Node.js isn't installed or wasn't added to your PATH. Reinstall it from <a href="https://nodejs.org" target="_blank" rel="noopener">nodejs.org</a> and try again.</li>
+            <li><strong>"Could not reach" your Canvas URL</strong> &mdash; Double-check the spelling of your school's Canvas address. A common mistake is typing <code>.org</code> instead of <code>.com</code>.</li>
+            <li><strong>"Invalid token"</strong> &mdash; Make sure you copied the entire token when you generated it. Canvas only shows it once &mdash; if you lost it, generate a new one from your Canvas settings.</li>
+            <li><strong>Your school uses a firewall or VPN</strong> &mdash; Some schools restrict API access from off-campus. Try connecting from your school's network, or ask your IT department if Canvas API access is allowed.</li>
+          </ul>
           <p>If you're still stuck, <a href="https://github.com/hughsibbele/Canvas-Agent/issues" target="_blank" rel="noopener">open an issue on GitHub</a> and we'll help you out.</p>
         </div>
       </details>

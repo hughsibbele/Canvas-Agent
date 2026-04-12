@@ -1,55 +1,50 @@
 # Canvas Agent
 
-MCP server that connects Claude AI to Instructure Canvas LMS. Manage courses, assignments, grades, and more through natural language.
+MCP server that connects Claude AI to [Instructure Canvas LMS](https://www.instructure.com/canvas). Teachers and administrators can manage courses, assignments, grades, and more through natural language.
 
-## Setup
+> **Looking to install Canvas Agent?** Follow the setup guide at **[hughsibbele.github.io/Canvas-Agent](https://hughsibbele.github.io/Canvas-Agent)** — no technical background required.
 
-**New to the terminal or don't have Node.js yet?** Follow the full step-by-step walkthrough at **[hughsibbele.github.io/Canvas-Agent](https://hughsibbele.github.io/Canvas-Agent)** — it explains every step.
+---
 
-### Prerequisites
+## Architecture
 
-You need these installed before running Canvas Agent:
+Canvas Agent is a [Model Context Protocol](https://modelcontextprotocol.io/) server that Claude launches as a subprocess and communicates with over stdio.
 
-1. **A Claude Pro subscription** ($20/month) — [sign up at claude.ai/pricing](https://claude.ai/pricing)
-2. **Node.js** — [download the LTS installer from nodejs.org](https://nodejs.org) and click through the defaults.
-3. **Claude Code and/or Claude Desktop** — Canvas Agent works in either, and if you install both the wizard will set up both:
-   - **Claude Code** (terminal-based): in a terminal, run
-     ```bash
-     npm install -g @anthropic-ai/claude-code
-     ```
-     Then type `claude` once to sign in with your Claude account.
-   - **Claude Desktop** (point-and-click app): [download from claude.ai/download](https://claude.ai/download)
-
-### Run the setup wizard
-
-```bash
-npx -y canvas-agent setup
+```
+Claude (Code / Desktop)
+  └─ spawns canvas-agent via npx
+       └─ MCP stdio transport
+            └─ Canvas REST API (bearer token auth)
 ```
 
-The wizard will walk you through connecting your Canvas account.
+| Component | Path | Role |
+|---|---|---|
+| MCP server | `src/index.ts` | Registers 15 tool modules with the MCP SDK |
+| Canvas API client | `src/canvas-client.ts` | Thin fetch wrapper with automatic pagination and rate-limit backoff |
+| Tool modules | `src/tools/*.ts` | One file per Canvas domain — each exports a `register*Tools(server)` function |
+| CLI entry point | `src/cli.ts` | `npx canvas-agent` starts the server; `npx canvas-agent setup` runs the setup wizard |
+| Setup wizard | `src/setup.ts` | Interactive CLI that validates credentials, detects Claude Code / Desktop, and registers the MCP server |
+| Landing site | `docs/` | Static GitHub Pages site with the end-user setup guide |
 
-### Alternative: install via Homebrew (macOS, developers)
+### Tool modules
 
-If you already use [Homebrew](https://brew.sh) and would rather manage these as casks and formulas, you can replace the prerequisites above with:
-
-```bash
-brew install node
-brew install --cask claude-code   # Claude Code (CLI)
-brew install --cask claude        # Claude Desktop (GUI app)
-```
-
-Skip the ones you don't want — Canvas Agent only needs one of `claude-code` or `claude` to function. Homebrew is entirely optional; the nodejs.org installer path above works without it.
-
-## What It Does
-
-Canvas Agent gives Claude access to your Canvas LMS:
-
-- **Courses & Modules** — list, organize, and manage course structure
-- **Assignments** — create, update, set due dates and submission types
-- **Grading & Rubrics** — grade submissions, create rubrics, post grades
-- **Discussions & Quizzes** — create discussion boards and quizzes
-- **Student Management** — enrollments, submissions, analytics
-- **Pages, Files & Calendar** — create pages, upload files, manage events
+| Module | File | Covers |
+|---|---|---|
+| Courses | `courses.ts` | List courses, grading periods, grading standards, late policy, sections, assignment groups |
+| Assignments | `assignments.ts` | CRUD assignments, batch update dates |
+| Submissions | `submissions.ts` | List/download submissions, submission summaries, missing submissions |
+| Grading | `grading.ts` | Grade submissions, bulk grade, grade with rubric, post/hide grades |
+| Rubrics | `rubrics.ts` | CRUD rubrics, associate/remove from assignments, view assessments |
+| Modules | `modules.ts` | CRUD modules and module items, publish modules |
+| Pages | `pages.ts` | CRUD pages, front page, page revisions |
+| Discussions | `discussions.ts` | CRUD discussions, download entries |
+| Quizzes | `quizzes.ts` | Classic Quizzes — CRUD, update dates, quiz reports |
+| New Quizzes | `new-quizzes.ts` | New Quizzes — CRUD, quiz items, accommodations |
+| Calendar | `calendar.ts` | CRUD calendar events |
+| Files | `files.ts` | List/get/update/delete files, folders, quota |
+| Enrollments | `enrollments.ts` | List students, user profiles, student enrollments |
+| Analytics | `analytics.ts` | Course activity/assignment analytics, student summaries/activity/messaging |
+| Scheduling | `scheduling.ts` | Course schedule overview |
 
 ## Development
 
@@ -57,10 +52,35 @@ Canvas Agent gives Claude access to your Canvas LMS:
 git clone https://github.com/hughsibbele/Canvas-Agent.git
 cd Canvas-Agent
 npm install
-cp .env.example .env     # add your Canvas URL and API token
+cp .env.example .env     # add your CANVAS_API_URL and CANVAS_API_TOKEN
 npm run build
-npm start
+node dist/cli.js         # start MCP server
+node dist/cli.js setup   # run setup wizard
 ```
+
+`npm run dev` starts `tsc --watch` for iterating on tool modules.
+
+### Adding a tool
+
+1. Create `src/tools/<domain>.ts` exporting a `register<Domain>Tools(server: McpServer)` function.
+2. Import and call it in `src/index.ts`.
+3. Rebuild (`npm run build`) and restart Claude to pick up the new tools.
+
+Each tool module follows the same pattern — define Zod input schemas and register them with `server.tool()`. Look at any existing module for the template.
+
+## Canvas API gotchas
+
+A few things worth knowing when adding or updating tools:
+
+- **Grading periods** scope grades and submissions to a single semester/term. Pass `grading_period_id` to `/courses/{id}/enrollments` (returns per-period `current_score`/`current_grade`) and to `/courses/{id}/students/submissions` (returns only that period's submissions). Without it you get cumulative data, which is wrong for year-long courses where the gradebook resets each semester.
+- **`/courses/{id}/grading_periods` returns a wrapped response** — `{"grading_periods": [...], "meta": {...}}` — so the `canvasAll` pagination helper won't flatten it. Use `canvas` and unwrap manually (see `list_grading_periods` in `tools/courses.ts`).
+- **Analytics endpoints don't support `grading_period_id`** — `get_student_summaries`, `get_course_assignment_analytics`, and `get_student_assignment_data` always return lifetime totals. For semester-scoped data, fetch submissions directly with `grading_period_id`.
+
+## Links
+
+- **npm**: [canvas-agent](https://www.npmjs.com/package/canvas-agent)
+- **Setup guide**: [hughsibbele.github.io/Canvas-Agent](https://hughsibbele.github.io/Canvas-Agent)
+- **Canvas API docs**: [canvas.instructure.com/doc/api](https://canvas.instructure.com/doc/api/)
 
 ## License
 

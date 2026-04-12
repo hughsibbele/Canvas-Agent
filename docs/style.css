@@ -101,6 +101,90 @@ h2 {
   font-size: 1.05rem;
 }
 
+/* ── Prerequisites ── */
+.prereq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.prereq {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.prereq h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.prereq p {
+  margin-bottom: 8px;
+}
+
+.prereq p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Path Cards (choose Claude Code vs Desktop) ── */
+.path-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.path-card {
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.path-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.path-desc {
+  margin-bottom: 12px;
+}
+
+.path-best-for {
+  font-size: 0.9rem;
+  color: var(--color-text-light);
+  font-style: italic;
+  margin-bottom: 20px;
+  flex-grow: 1;
+}
+
+.path-btn {
+  display: inline-block;
+  background: var(--color-primary);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: center;
+  transition: background 0.15s ease;
+}
+
+.path-btn:hover {
+  background: var(--color-primary-dark);
+  text-decoration: none;
+}
+
+.path-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* ── Steps ── */
 .steps {
   list-style: none;
@@ -147,6 +231,21 @@ h2 {
   font-size: 0.9rem;
   color: var(--color-text-light);
   font-style: italic;
+}
+
+/* ── Sub-steps (numbered lists inside a step) ── */
+.sub-steps {
+  margin: 12px 0;
+  padding-left: 20px;
+}
+
+.sub-steps li {
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.sub-steps li:last-child {
+  margin-bottom: 0;
 }
 
 /* ── Code blocks ── */
@@ -210,6 +309,17 @@ p code, li code {
   border: 1px solid var(--color-border);
 }
 
+/* ── Keyboard keys ── */
+kbd {
+  font-family: var(--font-sans);
+  font-size: 0.85em;
+  background: var(--color-code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
 /* ── Details/FAQ ── */
 details {
   background: var(--color-surface);
@@ -260,21 +370,22 @@ details summary:hover {
   margin-bottom: 0;
 }
 
-/* ── After Setup ── */
-.after-setup {
-  margin-top: 48px;
-  background: linear-gradient(135deg, #ECFDF5, #F0FDF4);
-  border: 1px solid #A7F3D0;
-  border-radius: var(--radius);
-  padding: 24px;
+/* ── Troubleshooting list ── */
+.troubleshoot-list {
+  margin: 12px 0;
+  padding-left: 20px;
 }
 
-.after-setup h3 {
-  color: #065F46;
-  font-size: 1.1rem;
-  margin-bottom: 8px;
+.troubleshoot-list li {
+  margin-bottom: 10px;
+  line-height: 1.5;
 }
 
+.troubleshoot-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Example prompts ── */
 .example-prompts {
   list-style: none;
   margin-top: 12px;
@@ -348,6 +459,10 @@ footer {
     gap: 12px;
   }
 
+  .path-cards {
+    grid-template-columns: 1fr;
+  }
+
   .feature-grid {
     grid-template-columns: 1fr;
   }
@@ -372,13 +487,20 @@ footer {
     background: linear-gradient(135deg, #1E3A5F 0%, #1E40AF 50%, #2563EB 100%);
   }
 
-  .after-setup {
-    background: linear-gradient(135deg, #064E3B, #065F46);
-    border-color: #047857;
+  .path-card {
+    border-color: var(--color-border);
   }
 
-  .after-setup h3 {
-    color: #6EE7B7;
+  .path-btn {
+    background: #3B82F6;
+  }
+
+  .path-btn:hover {
+    background: #2563EB;
+  }
+
+  kbd {
+    box-shadow: 0 1px 0 #4B5563;
   }
 
   .copy-btn {
