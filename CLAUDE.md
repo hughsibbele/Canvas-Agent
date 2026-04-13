@@ -32,6 +32,21 @@ node dist/cli.js       # start MCP server
 node dist/cli.js setup # run setup wizard
 ```
 
+### Publishing changes
+
+After making tool changes (especially new tools or schema updates), the npm package must be republished or users running `npx canvas-agent` won't see the updates. **Remind Hugh to publish** after any session that modifies `src/tools/*.ts`:
+
+```bash
+npm version patch   # or minor/major as appropriate
+npm run build
+npm publish
+```
+
+Then clear the local npx cache so Claude Code picks up the new version:
+```bash
+rm -rf ~/.npm/_npx && /mcp to reconnect
+```
+
 ## Canvas API gotchas
 
 A few things worth knowing when adding or updating tools:
