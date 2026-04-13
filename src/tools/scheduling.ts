@@ -30,11 +30,16 @@ export function registerSchedulingTools(server: McpServer) {
           body: JSON.stringify({ assignment: dates }),
         }
       );
+      let warning = "";
+      if (result.has_overrides) {
+        warning =
+          "\n⚠️  This assignment has section/student overrides. The base date was updated, but students see their override dates instead. Use list_assignment_overrides + update_assignment_override (or batch_update_dates with section_dates) to change what students actually see.";
+      }
       return {
         content: [
           {
             type: "text",
-            text: `Updated dates for "${result.name}":\n  due_at: ${result.due_at}\n  unlock_at: ${result.unlock_at}\n  lock_at: ${result.lock_at}`,
+            text: `Updated dates for "${result.name}":\n  due_at: ${result.due_at}\n  unlock_at: ${result.unlock_at}\n  lock_at: ${result.lock_at}${warning}`,
           },
         ],
       };
@@ -43,14 +48,32 @@ export function registerSchedulingTools(server: McpServer) {
 
   server.tool(
     "batch_update_dates",
-    "Update dates for multiple assignments at once. Works for regular assignments, graded discussions, and New Quizzes. Use get_course_schedule_overview first to see current dates. Provide an array of {assignment_id, due_at, unlock_at, lock_at} objects.",
+    "Update dates for multiple assignments at once. Override-aware: if an assignment has section overrides, updates those instead of the (ignored) base date. For assignments with overrides, provide section_dates to set per-section times; if only due_at is given, all overrides get that same time. Provide an array of {assignment_id, due_at, section_dates?, unlock_at, lock_at} objects.",
     {
       course_id: z.string().describe("Canvas course ID"),
       date_updates: z
         .array(
           z.object({
             assignment_id: z.string(),
-            due_at: z.string().optional(),
+            due_at: z
+              .string()
+              .optional()
+              .describe(
+                "Base due date (ISO 8601). Used directly if no overrides exist; used as fallback for overrides not listed in section_dates."
+              ),
+            section_dates: z
+              .array(
+                z.object({
+                  section_id: z.string().describe("Course section ID"),
+                  due_at: z.string().optional(),
+                  unlock_at: z.string().optional(),
+                  lock_at: z.string().optional(),
+                })
+              )
+              .optional()
+              .describe(
+                "Per-section due dates. Only needed when sections have different times (e.g. different block schedules)."
+              ),
             unlock_at: z.string().optional(),
             lock_at: z.string().optional(),
           })
@@ -59,18 +82,65 @@ export function registerSchedulingTools(server: McpServer) {
     },
     async ({ course_id, date_updates }) => {
       const results: string[] = [];
-      for (const { assignment_id, ...dates } of date_updates) {
+      for (const { assignment_id, section_dates, ...baseDates } of date_updates) {
         try {
-          const result = await canvas(
-            `/courses/${course_id}/assignments/${assignment_id}`,
-            {
-              method: "PUT",
-              body: JSON.stringify({ assignment: dates }),
+          // Check if the assignment has overrides
+          const overrides = await canvasAll(
+            `/courses/${course_id}/assignments/${assignment_id}/overrides`
+          );
+
+          if (overrides.length === 0) {
+            // No overrides — update the base date directly
+            const result = await canvas(
+              `/courses/${course_id}/assignments/${assignment_id}`,
+              {
+                method: "PUT",
+                body: JSON.stringify({ assignment: baseDates }),
+              }
+            );
+            results.push(
+              `  OK: "${result.name}" → due ${result.due_at ?? "none"}`
+            );
+          } else {
+            // Has overrides — update each one
+            const sectionMap = new Map(
+              (section_dates ?? []).map((s) => [s.section_id, s])
+            );
+
+            for (const ov of overrides) {
+              const sectionSpecific = sectionMap.get(
+                String(ov.course_section_id)
+              );
+              const dates = sectionSpecific
+                ? {
+                    due_at: sectionSpecific.due_at,
+                    unlock_at: sectionSpecific.unlock_at,
+                    lock_at: sectionSpecific.lock_at,
+                  }
+                : baseDates;
+
+              const updated = await canvas(
+                `/courses/${course_id}/assignments/${assignment_id}/overrides/${ov.id}`,
+                {
+                  method: "PUT",
+                  body: JSON.stringify({ assignment_override: dates }),
+                }
+              );
+              results.push(
+                `  OK: "${updated.title}" override → due ${updated.due_at ?? "none"}`
+              );
             }
-          );
-          results.push(
-            `  OK: "${result.name}" → due ${result.due_at ?? "none"}`
-          );
+            // Also update the base date if provided (for completeness)
+            if (baseDates.due_at) {
+              await canvas(
+                `/courses/${course_id}/assignments/${assignment_id}`,
+                {
+                  method: "PUT",
+                  body: JSON.stringify({ assignment: baseDates }),
+                }
+              );
+            }
+          }
         } catch (e: any) {
           results.push(`  FAILED: ${assignment_id} — ${e.message}`);
         }
@@ -80,6 +150,47 @@ export function registerSchedulingTools(server: McpServer) {
           {
             type: "text",
             text: `Batch date update (${date_updates.length} assignments):\n${results.join("\n")}`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "create_assignment_override",
+    "Create a new date override for a specific section or set of students on an assignment. Use this to set section-specific due dates (e.g., different block start times for different sections).",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      assignment_id: z.string().describe("Assignment ID"),
+      course_section_id: z
+        .string()
+        .optional()
+        .describe("Section ID (use list_sections to find). Provide this OR student_ids, not both."),
+      student_ids: z
+        .array(z.string())
+        .optional()
+        .describe("Array of student IDs for a student-specific override. Provide this OR course_section_id, not both."),
+      due_at: z.string().optional().describe("Due date (ISO 8601)"),
+      unlock_at: z.string().optional().describe("Available from (ISO 8601)"),
+      lock_at: z.string().optional().describe("Available until (ISO 8601)"),
+    },
+    async ({ course_id, assignment_id, course_section_id, student_ids, ...dates }) => {
+      const overrideData: any = { ...dates };
+      if (course_section_id) overrideData.course_section_id = course_section_id;
+      if (student_ids) overrideData.student_ids = student_ids;
+
+      const result = await canvas(
+        `/courses/${course_id}/assignments/${assignment_id}/overrides`,
+        {
+          method: "POST",
+          body: JSON.stringify({ assignment_override: overrideData }),
+        }
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created override "${result.title}" (ID ${result.id}):\n  due_at: ${result.due_at}\n  unlock_at: ${result.unlock_at}\n  lock_at: ${result.lock_at}`,
           },
         ],
       };
@@ -109,6 +220,69 @@ export function registerSchedulingTools(server: McpServer) {
           {
             type: "text",
             text: `Updated dates for quiz "${result.title}":\n  due_at: ${result.due_at}\n  unlock_at: ${result.unlock_at}\n  lock_at: ${result.lock_at}`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "list_assignment_overrides",
+    "List all date overrides (section-specific or student-specific) for an assignment. Use this to discover override IDs before updating them.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      assignment_id: z.string().describe("Assignment ID"),
+    },
+    async ({ course_id, assignment_id }) => {
+      const overrides = await canvasAll(
+        `/courses/${course_id}/assignments/${assignment_id}/overrides`
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: overrides.length
+              ? JSON.stringify(overrides, null, 2)
+              : "No overrides found — this assignment uses only its base due date.",
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "update_assignment_override",
+    "Update dates on a single section/student override. Use list_assignment_overrides first to get the override ID.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      assignment_id: z.string().describe("Assignment ID"),
+      override_id: z.string().describe("Override ID (from list_assignment_overrides)"),
+      due_at: z
+        .string()
+        .optional()
+        .describe("Due date (ISO 8601). Empty string to clear."),
+      unlock_at: z
+        .string()
+        .optional()
+        .describe("Available from (ISO 8601). Empty string to clear."),
+      lock_at: z
+        .string()
+        .optional()
+        .describe("Available until (ISO 8601). Empty string to clear."),
+    },
+    async ({ course_id, assignment_id, override_id, ...dates }) => {
+      const result = await canvas(
+        `/courses/${course_id}/assignments/${assignment_id}/overrides/${override_id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ assignment_override: dates }),
+        }
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Updated override "${result.title}" (ID ${result.id}):\n  due_at: ${result.due_at}\n  unlock_at: ${result.unlock_at}\n  lock_at: ${result.lock_at}`,
           },
         ],
       };
