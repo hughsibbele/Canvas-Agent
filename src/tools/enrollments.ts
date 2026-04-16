@@ -138,6 +138,303 @@ export function registerEnrollmentTools(server: McpServer) {
   );
 
   server.tool(
+    "crosslist_section",
+    "Move a section from its current course into a different course. Students, submissions, and grades in that section all follow it into the destination course. This is a significant action — confirm with the user before calling, and double-check you have the correct section_id (from list_sections on the source course) and new_course_id (from list_courses). To reverse, use decrosslist_section.",
+    {
+      section_id: z
+        .string()
+        .describe(
+          "Canvas section ID to move. Get this from list_sections on the section's current (source) course."
+        ),
+      new_course_id: z
+        .string()
+        .describe("Canvas course ID of the destination course to move the section into."),
+    },
+    async ({ section_id, new_course_id }) => {
+      const result = await canvas(
+        `/sections/${section_id}/crosslist/${new_course_id}`,
+        { method: "POST" }
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "decrosslist_section",
+    "Undo a crosslist — move a section back to its original course. Only works on sections that were previously crosslisted.",
+    {
+      section_id: z.string().describe("Canvas section ID to de-crosslist"),
+    },
+    async ({ section_id }) => {
+      const result = await canvas(`/sections/${section_id}/crosslist`, {
+        method: "DELETE",
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "create_section",
+    "Create a new section within a course. Useful for splitting a class into smaller groups with their own due dates or rosters.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      name: z.string().describe("Section name (shown to students)"),
+      start_at: z
+        .string()
+        .optional()
+        .describe("Section start date (ISO 8601)"),
+      end_at: z.string().optional().describe("Section end date (ISO 8601)"),
+      restrict_enrollments_to_section_dates: z
+        .boolean()
+        .optional()
+        .describe(
+          "If true, students only have access between start_at and end_at."
+        ),
+      sis_section_id: z
+        .string()
+        .optional()
+        .describe("Optional SIS id (admin-only)"),
+    },
+    async ({ course_id, ...fields }) => {
+      const course_section: any = {};
+      for (const [k, v] of Object.entries(fields)) {
+        if (v !== undefined) course_section[k] = v;
+      }
+      const result = await canvas(`/courses/${course_id}/sections`, {
+        method: "POST",
+        body: JSON.stringify({ course_section }),
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created section "${result.name}" (ID: ${result.id})`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "update_section",
+    "Update a section's name, dates, or enrollment restrictions.",
+    {
+      section_id: z.string().describe("Canvas section ID"),
+      name: z.string().optional(),
+      start_at: z.string().optional().describe("ISO 8601"),
+      end_at: z.string().optional().describe("ISO 8601"),
+      restrict_enrollments_to_section_dates: z.boolean().optional(),
+    },
+    async ({ section_id, ...fields }) => {
+      const course_section: any = {};
+      for (const [k, v] of Object.entries(fields)) {
+        if (v !== undefined) course_section[k] = v;
+      }
+      const result = await canvas(`/sections/${section_id}`, {
+        method: "PUT",
+        body: JSON.stringify({ course_section }),
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "delete_section",
+    "⚠️ DESTRUCTIVE — DELETES A SECTION. Only succeeds if the section has zero enrollments (Canvas refuses otherwise). Confirm with the user before calling and double-check the section_id is correct.",
+    { section_id: z.string().describe("Canvas section ID") },
+    async ({ section_id }) => {
+      const result = await canvas(`/sections/${section_id}`, {
+        method: "DELETE",
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "enroll_user",
+    "Enroll a user (student, teacher, TA, observer, or designer) in a course or specific section. By default the enrollment is created in 'invited' state — pass enrollment_state='active' to skip the invitation step (typical for SIS-style adds).",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      user_id: z.string().describe("Canvas user ID to enroll"),
+      type: z
+        .enum([
+          "StudentEnrollment",
+          "TeacherEnrollment",
+          "TaEnrollment",
+          "ObserverEnrollment",
+          "DesignerEnrollment",
+        ])
+        .default("StudentEnrollment")
+        .describe("Enrollment role"),
+      section_id: z
+        .string()
+        .optional()
+        .describe(
+          "Specific section to enroll into. Omit for the course's default section."
+        ),
+      enrollment_state: z
+        .enum(["active", "invited", "inactive"])
+        .default("active")
+        .describe(
+          "Initial state. 'active' = enrolled immediately (no invite email)."
+        ),
+      notify: z
+        .boolean()
+        .default(false)
+        .describe("Send the user a notification email"),
+      limit_privileges_to_course_section: z
+        .boolean()
+        .optional()
+        .describe(
+          "Restrict the user to only see other users in the same section (often used for TAs)."
+        ),
+    },
+    async ({
+      course_id,
+      user_id,
+      type,
+      section_id,
+      enrollment_state,
+      notify,
+      limit_privileges_to_course_section,
+    }) => {
+      const enrollment: any = {
+        user_id,
+        type,
+        enrollment_state,
+        notify,
+      };
+      if (section_id) enrollment.course_section_id = section_id;
+      if (limit_privileges_to_course_section !== undefined) {
+        enrollment.limit_privileges_to_course_section =
+          limit_privileges_to_course_section;
+      }
+      // The enroll endpoint hangs the section_id off the URL when you want
+      // to target a specific section.
+      const path = section_id
+        ? `/sections/${section_id}/enrollments`
+        : `/courses/${course_id}/enrollments`;
+      const result = await canvas(path, {
+        method: "POST",
+        body: JSON.stringify({ enrollment }),
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Enrolled user ${user_id} as ${type} (enrollment ID: ${result.id}, state: ${result.enrollment_state})`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "update_enrollment_state",
+    "Drop or reactivate an enrollment without deleting it. 'conclude' ends participation but keeps grades visible. 'inactivate' soft-removes (admin term), 'deactivate' is the user-facing equivalent. 'reactivate' restores a previously inactive enrollment to active. To find the enrollment_id, use get_student_enrollments.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      enrollment_id: z
+        .string()
+        .describe(
+          "Canvas enrollment id (NOT user id). Get from get_student_enrollments."
+        ),
+      task: z
+        .enum(["conclude", "inactivate", "deactivate", "reactivate"])
+        .describe(
+          "Lifecycle transition: conclude=end participation, deactivate/inactivate=soft remove, reactivate=restore."
+        ),
+    },
+    async ({ course_id, enrollment_id, task }) => {
+      // 'reactivate' is a separate endpoint
+      if (task === "reactivate") {
+        const result = await canvas(
+          `/courses/${course_id}/enrollments/${enrollment_id}/reactivate`,
+          { method: "PUT" }
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+      const result = await canvas(
+        `/courses/${course_id}/enrollments/${enrollment_id}?task=${task}`,
+        { method: "DELETE" }
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "delete_enrollment",
+    "⚠️ DESTRUCTIVE — HARD-DELETES AN ENROLLMENT. The user vanishes from the course roster and their submissions, grades, and participation history are removed. There is NO undo. In nearly every real scenario you want update_enrollment_state with task='deactivate' (soft-remove, reversible) or task='conclude' (end-of-term) instead. Only call delete_enrollment when the user has explicitly said \"hard delete\" or \"permanently remove\" and named the user. Confirm before invoking.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      enrollment_id: z.string().describe("Canvas enrollment id"),
+    },
+    async ({ course_id, enrollment_id }) => {
+      const result = await canvas(
+        `/courses/${course_id}/enrollments/${enrollment_id}?task=delete`,
+        { method: "DELETE" }
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "move_student_to_section",
+    "Move a student from one section to another within the same course. Implemented as deactivate + re-enroll, which preserves their submissions and grades. Use this rather than deleting and re-creating.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      user_id: z.string().describe("Canvas user id of the student"),
+      from_enrollment_id: z
+        .string()
+        .describe(
+          "Current enrollment id to deactivate (find via get_student_enrollments)"
+        ),
+      to_section_id: z
+        .string()
+        .describe("Section id to move the student into"),
+    },
+    async ({ course_id, user_id, from_enrollment_id, to_section_id }) => {
+      await canvas(
+        `/courses/${course_id}/enrollments/${from_enrollment_id}?task=deactivate`,
+        { method: "DELETE" }
+      );
+      const enrollment = {
+        user_id,
+        type: "StudentEnrollment",
+        enrollment_state: "active",
+        course_section_id: to_section_id,
+        notify: false,
+      };
+      const result = await canvas(`/sections/${to_section_id}/enrollments`, {
+        method: "POST",
+        body: JSON.stringify({ enrollment }),
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Moved user ${user_id} into section ${to_section_id} (new enrollment ID: ${result.id}). Old enrollment ${from_enrollment_id} is now inactive.`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
     "get_user_profile",
     "Get any user's profile information including name, email, and bio. Works for students, teachers, and any Canvas user.",
     {

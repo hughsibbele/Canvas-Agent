@@ -71,14 +71,27 @@ export async function canvas(
  * Auto-paginated GET — follows Link: <...>; rel="next" headers
  * and returns all results as a flat array.
  * Canvas defaults to 10 items per page; we request 100.
+ *
+ * Param values may be a string or an array of strings. Arrays are emitted
+ * as repeated keys, which Canvas requires for `include[]`, `state[]`, etc.
  */
 export async function canvasAll(
   path: string,
-  params?: Record<string, string>
+  params?: Record<string, string | string[]>
 ): Promise<any[]> {
   const sep = path.includes("?") ? "&" : "?";
-  const qs = new URLSearchParams({ per_page: "100", ...params }).toString();
-  let url: string | null = `${BASE_URL}${path}${sep}${qs}`;
+  const qs = new URLSearchParams();
+  qs.append("per_page", "100");
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (Array.isArray(value)) {
+        for (const v of value) qs.append(key, v);
+      } else {
+        qs.append(key, value);
+      }
+    }
+  }
+  let url: string | null = `${BASE_URL}${path}${sep}${qs.toString()}`;
   const results: any[] = [];
 
   while (url) {
