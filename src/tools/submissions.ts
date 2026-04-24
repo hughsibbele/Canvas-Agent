@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { canvas, canvasAll } from "../canvas-client.js";
-import { writeFile, mkdir } from "node:fs/promises";
+import { canvas, canvasAll, fetchCanvasFile } from "../canvas-client.js";
+import { writeFile, mkdir, chmod } from "node:fs/promises";
 import { join } from "node:path";
 
 export function registerSubmissionTools(server: McpServer) {
@@ -102,23 +102,14 @@ export function registerSubmissionTools(server: McpServer) {
 
         for (const attachment of sub.attachments) {
           try {
-            let res: Response | null = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
-              res = await fetch(attachment.url, {
-                headers: {
-                  Authorization: `Bearer ${process.env.CANVAS_API_TOKEN}`,
-                },
-              });
-              if (res.ok || res.status !== 429) break;
-              const delay = 1000 * (attempt + 1);
-              await new Promise((r) => setTimeout(r, delay));
+            const buffer = await fetchCanvasFile(attachment.url);
+            const filePath = join(studentDir, attachment.filename);
+            await writeFile(filePath, buffer);
+            try {
+              await chmod(filePath, 0o600);
+            } catch {
+              // Best effort — Windows doesn't honor Unix modes.
             }
-            if (!res!.ok) throw new Error(`HTTP ${res!.status} for ${attachment.filename}`);
-            const buffer = Buffer.from(await res!.arrayBuffer());
-            await writeFile(
-              join(studentDir, attachment.filename),
-              buffer
-            );
             downloaded++;
           } catch (e: any) {
             errors.push(
@@ -185,6 +176,11 @@ export function registerSubmissionTools(server: McpServer) {
       await mkdir(output_dir, { recursive: true });
       const filePath = join(output_dir, `${safeName}.json`);
       await writeFile(filePath, JSON.stringify(fullEntries, null, 2));
+      try {
+        await chmod(filePath, 0o600);
+      } catch {
+        // Best effort — Windows doesn't honor Unix modes.
+      }
 
       return {
         content: [

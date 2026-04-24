@@ -14,6 +14,7 @@ import {
   mkdirSync,
   statSync,
   realpathSync,
+  chmodSync,
 } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -556,13 +557,19 @@ function registerWithDesktop(apiUrl: string, token: string): RegisterResult {
     };
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+    try {
+      chmodSync(configPath, 0o600);
+    } catch {
+      // Best effort — Windows doesn't honor Unix modes, and we don't want
+      // a chmod failure to block an otherwise successful install.
+    }
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e.message || "unknown error writing Desktop config" };
   }
 }
 
-function printManualConfig(apiUrl: string, token: string) {
+function printManualConfig(apiUrl: string) {
   console.log(yellow("\n  Add this to your Claude MCP configuration:\n"));
   const config = {
     "canvas-agent": {
@@ -570,11 +577,17 @@ function printManualConfig(apiUrl: string, token: string) {
       args: ["-y", "canvas-agent"],
       env: {
         CANVAS_API_URL: apiUrl,
-        CANVAS_API_TOKEN: token,
+        CANVAS_API_TOKEN: "<paste your Canvas token here>",
       },
     },
   };
   console.log("  " + JSON.stringify(config, null, 2).replace(/\n/g, "\n  "));
+  console.log(
+    "  " +
+      dim(
+        "Replace <paste your Canvas token here> with the token you generated in Canvas."
+      )
+  );
   console.log();
 }
 
@@ -803,7 +816,7 @@ export async function runSetup(): Promise<void> {
     // If NOTHING succeeded, fall back to printing the config for manual install.
     if (!codeOk && !desktopOk) {
       console.log(red("  ✗") + " Canvas Agent could not be installed automatically.\n");
-      printManualConfig(apiUrl, token);
+      printManualConfig(apiUrl);
       console.log("  Copy the JSON above and add it to your Claude configuration.");
       console.log("  For help, visit: " + cyan("https://hughsibbele.github.io/Canvas-Agent") + "\n");
       return;

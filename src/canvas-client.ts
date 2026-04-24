@@ -108,6 +108,20 @@ export async function canvasAll(
   return results;
 }
 
+/**
+ * Download a file from a Canvas-returned URL and return its bytes.
+ * Submission attachments come back as full URLs (often pre-signed S3/CDN
+ * links), so we centralize the fetch here to share auth, retry, and error
+ * handling with the rest of the client.
+ */
+export async function fetchCanvasFile(url: string): Promise<Buffer> {
+  const res = await fetchWithRetry(url, { headers: authHeaders() });
+  if (!res.ok) {
+    throw new Error(`Canvas file fetch ${res.status} ${res.statusText}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 /** Summarize an assignment/discussion/quiz to reduce token usage. */
 export function summarizeItem(item: any) {
   return {
