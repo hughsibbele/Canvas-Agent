@@ -156,7 +156,6 @@ export function registerAssignmentTools(server: McpServer) {
         ),
     },
     async ({ course_id, assignment_id, confirm_name }) => {
-      // Verify the name matches before deleting
       const assignment = await canvas(
         `/courses/${course_id}/assignments/${assignment_id}`
       );

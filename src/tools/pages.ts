@@ -135,20 +135,34 @@ export function registerPageTools(server: McpServer) {
 
   server.tool(
     "delete_page",
-    "Delete a wiki page. This cannot be undone.",
+    "Permanently delete a wiki page. This cannot be undone.",
     {
       course_id: z.string().describe("Canvas course ID"),
       url_or_id: z
         .string()
         .describe("Page URL slug or numeric page ID"),
+      confirm_title: z
+        .string()
+        .describe("Type the page title to confirm deletion (safety check)"),
     },
-    async ({ course_id, url_or_id }) => {
+    async ({ course_id, url_or_id, confirm_title }) => {
+      const page = await canvas(`/courses/${course_id}/pages/${url_or_id}`);
+      if (page.title !== confirm_title) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: page title is "${page.title}" but you confirmed "${confirm_title}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       await canvas(`/courses/${course_id}/pages/${url_or_id}`, {
         method: "DELETE",
       });
       return {
         content: [
-          { type: "text", text: `Deleted page "${url_or_id}"` },
+          { type: "text", text: `Deleted page "${page.title}"` },
         ],
       };
     }

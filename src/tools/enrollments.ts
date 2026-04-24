@@ -247,8 +247,24 @@ export function registerEnrollmentTools(server: McpServer) {
   server.tool(
     "delete_section",
     "⚠️ DESTRUCTIVE — DELETES A SECTION. Only succeeds if the section has zero enrollments (Canvas refuses otherwise). Confirm with the user before calling and double-check the section_id is correct.",
-    { section_id: z.string().describe("Canvas section ID") },
-    async ({ section_id }) => {
+    {
+      section_id: z.string().describe("Canvas section ID"),
+      confirm_name: z
+        .string()
+        .describe("Type the section name to confirm deletion (safety check)"),
+    },
+    async ({ section_id, confirm_name }) => {
+      const section = await canvas(`/sections/${section_id}`);
+      if (section.name !== confirm_name) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: section name is "${section.name}" but you confirmed "${confirm_name}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       const result = await canvas(`/sections/${section_id}`, {
         method: "DELETE",
       });
@@ -380,8 +396,27 @@ export function registerEnrollmentTools(server: McpServer) {
     {
       course_id: z.string().describe("Canvas course ID"),
       enrollment_id: z.string().describe("Canvas enrollment id"),
+      confirm_user_name: z
+        .string()
+        .describe(
+          "Type the enrolled user's name to confirm deletion (safety check)"
+        ),
     },
-    async ({ course_id, enrollment_id }) => {
+    async ({ course_id, enrollment_id, confirm_user_name }) => {
+      const enrollment = await canvas(
+        `/courses/${course_id}/enrollments/${enrollment_id}`
+      );
+      const actualName = enrollment.user?.name ?? enrollment.user_name;
+      if (actualName !== confirm_user_name) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: enrolled user is "${actualName}" but you confirmed "${confirm_user_name}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       const result = await canvas(
         `/courses/${course_id}/enrollments/${enrollment_id}?task=delete`,
         { method: "DELETE" }

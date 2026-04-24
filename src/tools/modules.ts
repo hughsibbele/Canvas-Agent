@@ -79,12 +79,28 @@ export function registerModuleTools(server: McpServer) {
 
   server.tool(
     "delete_module",
-    "Delete a module from a course.",
+    "Permanently delete a module and all items within it. This cannot be undone.",
     {
       course_id: z.string().describe("Canvas course ID"),
       module_id: z.string().describe("Module ID"),
+      confirm_name: z
+        .string()
+        .describe("Type the module name to confirm deletion (safety check)"),
     },
-    async ({ course_id, module_id }) => {
+    async ({ course_id, module_id, confirm_name }) => {
+      const module = await canvas(
+        `/courses/${course_id}/modules/${module_id}`
+      );
+      if (module.name !== confirm_name) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: module name is "${module.name}" but you confirmed "${confirm_name}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       await canvas(`/courses/${course_id}/modules/${module_id}`, {
         method: "DELETE",
       });
@@ -92,7 +108,7 @@ export function registerModuleTools(server: McpServer) {
         content: [
           {
             type: "text",
-            text: `Deleted module ${module_id}`,
+            text: `Deleted module "${confirm_name}"`,
           },
         ],
       };
@@ -225,13 +241,31 @@ export function registerModuleTools(server: McpServer) {
 
   server.tool(
     "delete_module_item",
-    "Delete an item from a module.",
+    "Remove an item from a module. This only removes the module entry — the underlying assignment/page/file is not deleted.",
     {
       course_id: z.string().describe("Canvas course ID"),
       module_id: z.string().describe("Module ID"),
       item_id: z.string().describe("Module item ID"),
+      confirm_title: z
+        .string()
+        .describe(
+          "Type the module item title to confirm deletion (safety check)"
+        ),
     },
-    async ({ course_id, module_id, item_id }) => {
+    async ({ course_id, module_id, item_id, confirm_title }) => {
+      const item = await canvas(
+        `/courses/${course_id}/modules/${module_id}/items/${item_id}`
+      );
+      if (item.title !== confirm_title) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: module item title is "${item.title}" but you confirmed "${confirm_title}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       await canvas(
         `/courses/${course_id}/modules/${module_id}/items/${item_id}`,
         { method: "DELETE" }
@@ -240,7 +274,7 @@ export function registerModuleTools(server: McpServer) {
         content: [
           {
             type: "text",
-            text: `Deleted module item ${item_id}`,
+            text: `Deleted module item "${confirm_title}"`,
           },
         ],
       };

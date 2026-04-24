@@ -126,11 +126,28 @@ export function registerFileTools(server: McpServer) {
     "Permanently delete a file.",
     {
       file_id: z.string().describe("File ID"),
+      confirm_name: z
+        .string()
+        .describe(
+          "Type the file's display name to confirm deletion (safety check)"
+        ),
     },
-    async ({ file_id }) => {
+    async ({ file_id, confirm_name }) => {
+      const file = await canvas(`/files/${file_id}`);
+      const actualName = file.display_name ?? file.filename;
+      if (actualName !== confirm_name) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: file name is "${actualName}" but you confirmed "${confirm_name}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       await canvas(`/files/${file_id}`, { method: "DELETE" });
       return {
-        content: [{ type: "text", text: `Deleted file ${file_id}` }],
+        content: [{ type: "text", text: `Deleted file "${actualName}"` }],
       };
     }
   );

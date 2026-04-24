@@ -253,8 +253,24 @@ export function registerCourseTools(server: McpServer) {
   server.tool(
     "delete_course",
     "⚠️ DESTRUCTIVE — PERMANENTLY DELETES A COURSE. The course is removed from the gradebook, hidden from everyone, and effectively unrecoverable through the UI (only an admin can restore from the deleted-objects audit log, and only briefly). Wipes implied access to assignments, modules, files, and grades. NEVER call without explicit user confirmation that names the course by id and title. For end-of-term wind-down, use conclude_course instead — that is reversible.",
-    { course_id: z.string().describe("Canvas course ID") },
-    async ({ course_id }) => {
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      confirm_name: z
+        .string()
+        .describe("Type the course name to confirm deletion (safety check)"),
+    },
+    async ({ course_id, confirm_name }) => {
+      const course = await canvas(`/courses/${course_id}`);
+      if (course.name !== confirm_name) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: course name is "${course.name}" but you confirmed "${confirm_name}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       const result = await canvas(`/courses/${course_id}?event=delete`, {
         method: "DELETE",
       });
@@ -267,8 +283,24 @@ export function registerCourseTools(server: McpServer) {
   server.tool(
     "reset_course_content",
     "⚠️ DESTRUCTIVE — WIPES ALL COURSE CONTENT. Deletes every assignment, module, page, file, quiz, discussion, announcement, rubric, and submission in the course, then issues a brand-new course id (the old id is invalidated). Enrollments and gradebook history are also cleared. There is NO undo. Only call when the user has explicitly asked to reset/wipe a specific course — never as part of a copy or import workflow. NEVER call on a published course with active students. Confirm course id AND title with the user before invoking.",
-    { course_id: z.string().describe("Canvas course ID to reset") },
-    async ({ course_id }) => {
+    {
+      course_id: z.string().describe("Canvas course ID to reset"),
+      confirm_name: z
+        .string()
+        .describe("Type the course name to confirm reset (safety check)"),
+    },
+    async ({ course_id, confirm_name }) => {
+      const course = await canvas(`/courses/${course_id}`);
+      if (course.name !== confirm_name) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: course name is "${course.name}" but you confirmed "${confirm_name}". Reset aborted.`,
+            },
+          ],
+        };
+      }
       const result = await canvas(`/courses/${course_id}/reset_content`, {
         method: "POST",
       });

@@ -120,11 +120,25 @@ export function registerCalendarTools(server: McpServer) {
 
   server.tool(
     "delete_calendar_event",
-    "Delete a calendar event.",
+    "Permanently delete a calendar event.",
     {
       event_id: z.string().describe("Calendar event ID"),
+      confirm_title: z
+        .string()
+        .describe("Type the event title to confirm deletion (safety check)"),
     },
-    async ({ event_id }) => {
+    async ({ event_id, confirm_title }) => {
+      const event = await canvas(`/calendar_events/${event_id}`);
+      if (event.title !== confirm_title) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: event title is "${event.title}" but you confirmed "${confirm_title}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       await canvas(`/calendar_events/${event_id}`, {
         method: "DELETE",
       });
@@ -132,7 +146,7 @@ export function registerCalendarTools(server: McpServer) {
         content: [
           {
             type: "text",
-            text: `Deleted calendar event ${event_id}`,
+            text: `Deleted calendar event "${event.title}"`,
           },
         ],
       };

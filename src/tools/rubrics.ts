@@ -194,18 +194,34 @@ export function registerRubricTools(server: McpServer) {
 
   server.tool(
     "delete_rubric",
-    "Delete a rubric from a course. This removes it from all associated assignments.",
+    "Permanently delete a rubric from a course. This removes it from all associated assignments and cannot be undone.",
     {
       course_id: z.string().describe("Canvas course ID"),
       rubric_id: z.string().describe("Rubric ID to delete"),
+      confirm_title: z
+        .string()
+        .describe("Type the rubric title to confirm deletion (safety check)"),
     },
-    async ({ course_id, rubric_id }) => {
+    async ({ course_id, rubric_id, confirm_title }) => {
+      const rubric = await canvas(
+        `/courses/${course_id}/rubrics/${rubric_id}`
+      );
+      if (rubric.title !== confirm_title) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Safety check failed: rubric title is "${rubric.title}" but you confirmed "${confirm_title}". Delete aborted.`,
+            },
+          ],
+        };
+      }
       await canvas(`/courses/${course_id}/rubrics/${rubric_id}`, {
         method: "DELETE",
       });
       return {
         content: [
-          { type: "text", text: `Deleted rubric ${rubric_id}` },
+          { type: "text", text: `Deleted rubric "${rubric.title}"` },
         ],
       };
     }
