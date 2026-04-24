@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
+import { rehydrateText } from "../anonymizer.js";
 
 export function registerGradingTools(server: McpServer) {
   server.tool(
@@ -48,7 +49,8 @@ export function registerGradingTools(server: McpServer) {
       if (Object.keys(submission).length > 0) body.submission = submission;
 
       const commentObj: Record<string, any> = {};
-      if (comment !== undefined) commentObj.text_comment = comment;
+      if (comment !== undefined)
+        commentObj.text_comment = rehydrateText(comment, course_id);
       if (comment_file_ids !== undefined)
         commentObj.file_ids = comment_file_ids;
       if (Object.keys(commentObj).length > 0) body.comment = commentObj;
@@ -94,7 +96,8 @@ export function registerGradingTools(server: McpServer) {
       const grade_data: Record<string, any> = {};
       for (const g of grades) {
         const entry: Record<string, any> = { posted_grade: g.score };
-        if (g.comment !== undefined) entry.text_comment = g.comment;
+        if (g.comment !== undefined)
+          entry.text_comment = rehydrateText(g.comment, course_id);
         grade_data[g.student_id] = entry;
       }
 

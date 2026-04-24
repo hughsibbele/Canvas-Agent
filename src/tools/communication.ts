@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas } from "../canvas-client.js";
+import { rehydrateText } from "../anonymizer.js";
 
 export function registerCommunicationTools(server: McpServer) {
   server.tool(
@@ -43,10 +44,10 @@ export function registerCommunicationTools(server: McpServer) {
     }) => {
       const payload: any = {
         recipients,
-        body,
+        body: rehydrateText(body, null),
         group_conversation,
       };
-      if (subject) payload.subject = subject;
+      if (subject) payload.subject = rehydrateText(subject, null);
       if (context_code) payload.context_code = context_code;
       if (bulk_message) payload.bulk_message = true;
       const result = await canvas(`/conversations`, {
@@ -92,8 +93,8 @@ export function registerCommunicationTools(server: McpServer) {
       published,
     }) => {
       const body: any = {
-        title,
-        message,
+        title: rehydrateText(title, course_id),
+        message: rehydrateText(message, course_id),
         is_announcement: true,
         published,
         locked: lock_comments,
@@ -131,7 +132,10 @@ export function registerCommunicationTools(server: McpServer) {
     },
     async ({ course_id, assignment_id, user_id, comment, group_comment }) => {
       const body = {
-        comment: { text_comment: comment, group_comment },
+        comment: {
+          text_comment: rehydrateText(comment, course_id),
+          group_comment,
+        },
       };
       const result = await canvas(
         `/courses/${course_id}/assignments/${assignment_id}/submissions/${user_id}`,

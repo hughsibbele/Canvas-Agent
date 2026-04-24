@@ -2,6 +2,12 @@
  * Thin wrapper around the Canvas REST API with automatic pagination.
  */
 
+import {
+  anonymizeResponse,
+  extractCourseIdFromPath,
+  isAnonymizationEnabled,
+} from "./anonymizer.js";
+
 const BASE_URL = process.env.CANVAS_API_URL;
 const TOKEN = process.env.CANVAS_API_TOKEN;
 
@@ -64,7 +70,11 @@ export async function canvas(
 
   // Some endpoints (DELETE) return 204 with no body
   if (res.status === 204) return { success: true };
-  return res.json();
+  const data = await res.json();
+  if (isAnonymizationEnabled()) {
+    return anonymizeResponse(data, extractCourseIdFromPath(path));
+  }
+  return data;
 }
 
 /**
@@ -93,6 +103,8 @@ export async function canvasAll(
   }
   let url: string | null = `${BASE_URL}${path}${sep}${qs.toString()}`;
   const results: any[] = [];
+  const courseId = extractCourseIdFromPath(path);
+  const anon = isAnonymizationEnabled();
 
   while (url) {
     const res = await fetchWithRetry(url, { headers: authHeaders() });
@@ -100,7 +112,8 @@ export async function canvasAll(
       const body = await res.text();
       throw new Error(`Canvas API ${res.status}: ${body}`);
     }
-    const data = await res.json();
+    const raw = await res.json();
+    const data = anon ? anonymizeResponse(raw, courseId) : raw;
     results.push(...(Array.isArray(data) ? data : [data]));
     url = getNextUrl(res.headers.get("link"));
   }

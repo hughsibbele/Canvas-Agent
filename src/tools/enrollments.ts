@@ -18,16 +18,25 @@ export function registerEnrollmentTools(server: McpServer) {
         .describe("Filter by enrollment state(s)"),
     },
     async ({ course_id, section_id, state }) => {
-      const params: Record<string, string> = {
+      // Canvas's /courses/:id/enrollments does not accept a section_id query
+      // param (returns 500). Fetch course-scoped enrollments and filter by
+      // course_section_id client-side. Keeping the path course-scoped also
+      // preserves the course-id needed by the anonymizer.
+      const params: Record<string, string | string[]> = {
         "type[]": "StudentEnrollment",
       };
-      if (section_id) params.section_id = section_id;
-      if (state) params["state[]"] = state.join(",");
+      if (state) params["state[]"] = state;
 
-      const enrollments = await canvasAll(
+      let enrollments = await canvasAll(
         `/courses/${course_id}/enrollments`,
         params
       );
+      if (section_id) {
+        const want = String(section_id);
+        enrollments = enrollments.filter(
+          (e: any) => String(e.course_section_id) === want
+        );
+      }
       const summary = enrollments.map((e: any) => ({
         user_id: e.user_id,
         name: e.user?.name ?? null,

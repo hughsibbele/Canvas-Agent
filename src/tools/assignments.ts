@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll, summarizeItem } from "../canvas-client.js";
+import { rehydrateText } from "../anonymizer.js";
 
 export function registerAssignmentTools(server: McpServer) {
   server.tool(
@@ -92,9 +93,12 @@ export function registerAssignmentTools(server: McpServer) {
       position: z.number().optional().describe("Position within the group"),
     },
     async ({ course_id, ...params }) => {
+      const assignment: Record<string, any> = { ...params };
+      if (assignment.description !== undefined)
+        assignment.description = rehydrateText(assignment.description, course_id);
       const result = await canvas(`/courses/${course_id}/assignments`, {
         method: "POST",
-        body: JSON.stringify({ assignment: params }),
+        body: JSON.stringify({ assignment }),
       });
       return {
         content: [
@@ -125,11 +129,14 @@ export function registerAssignmentTools(server: McpServer) {
       position: z.number().optional(),
     },
     async ({ course_id, assignment_id, ...params }) => {
+      const assignment: Record<string, any> = { ...params };
+      if (assignment.description !== undefined)
+        assignment.description = rehydrateText(assignment.description, course_id);
       const result = await canvas(
         `/courses/${course_id}/assignments/${assignment_id}`,
         {
           method: "PUT",
-          body: JSON.stringify({ assignment: params }),
+          body: JSON.stringify({ assignment }),
         }
       );
       return {
@@ -199,6 +206,9 @@ export function registerAssignmentTools(server: McpServer) {
         .describe("Fields to update on each assignment"),
     },
     async ({ course_id, assignment_ids, updates }) => {
+      const payload: Record<string, any> = { ...updates };
+      if (payload.description !== undefined)
+        payload.description = rehydrateText(payload.description, course_id);
       const results: string[] = [];
       for (const id of assignment_ids) {
         try {
@@ -206,7 +216,7 @@ export function registerAssignmentTools(server: McpServer) {
             `/courses/${course_id}/assignments/${id}`,
             {
               method: "PUT",
-              body: JSON.stringify({ assignment: updates }),
+              body: JSON.stringify({ assignment: payload }),
             }
           );
           results.push(`  OK: "${result.name}" (${id})`);

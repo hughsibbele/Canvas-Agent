@@ -1,6 +1,7 @@
 /**
  * Interactive setup wizard for Canvas Agent.
- * Guides non-technical users through connecting Canvas to Claude.
+ * Guides non-technical users through connecting Canvas to Gemini CLI,
+ * Claude Code, or Claude Desktop — whichever they have installed.
  * Uses only Node.js built-ins — no external dependencies.
  */
 
@@ -33,14 +34,23 @@ function banner() {
   console.log(cyan("  ║") + bold("     Canvas Agent — Setup Wizard      ") + cyan("║"));
   console.log(cyan("  ╚══════════════════════════════════════╝"));
   console.log();
-  console.log("  This will connect Claude to your Canvas courses.");
-  console.log("  You'll need about 3 minutes and access to your");
-  console.log("  Canvas account.\n");
+  console.log("  This will connect Gemini or Claude to your Canvas");
+  console.log("  courses. You'll need about 3 minutes and access to");
+  console.log("  your Canvas account.\n");
 }
 
 function isClaudeCodeInstalled(): boolean {
   try {
     execSync("claude --version", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isGeminiCliInstalled(): boolean {
+  try {
+    execSync("gemini --version", { stdio: "pipe" });
     return true;
   } catch {
     return false;
@@ -317,19 +327,19 @@ function registerWithClaudeCode(
 
 async function chooseScope(
   rl: ReadlineInterface,
-  alsoInstallingInDesktop: boolean
+  hasOtherGlobalTargets: boolean
 ): Promise<ScopeChoice> {
-  // When Desktop is also a target, the heading and intro need to make clear
-  // that this scope question only affects Claude Code — in Claude Desktop,
-  // Canvas Agent is always globally available and we can't narrow that.
-  if (alsoInstallingInDesktop) {
+  // When Desktop or Gemini CLI is also a target, the heading and intro need
+  // to make clear that this scope question only affects Claude Code — in
+  // those other targets, Canvas Agent is always globally available.
+  if (hasOtherGlobalTargets) {
     console.log(bold("  Step 3: Where to Use Canvas Agent in Claude Code\n"));
     console.log(
       "  " +
-        dim("(This choice only affects Claude Code. In Claude Desktop,")
+        dim("(This choice only affects Claude Code. In Claude Desktop and")
     );
     console.log(
-      "  " + dim("Canvas Agent is always available globally.)") + "\n"
+      "  " + dim("Gemini CLI, Canvas Agent is always available globally.)") + "\n"
     );
     console.log("  Canvas Agent can be available every time you use Claude Code,");
     console.log("  or only when you're working in a specific folder.\n");
@@ -569,8 +579,62 @@ function registerWithDesktop(apiUrl: string, token: string): RegisterResult {
   }
 }
 
+// Gemini CLI stores its config at ~/.gemini/settings.json with the same
+// `mcpServers` shape that Claude Code/Desktop use. We write the file
+// directly (rather than shelling out to `gemini mcp add`) so behavior is
+// stable across Gemini CLI versions and we don't have to navigate flag
+// quirks like passing `-y` to npx through yargs.
+function getGeminiConfigPath(): string {
+  return join(homedir(), ".gemini", "settings.json");
+}
+
+function registerWithGeminiCli(apiUrl: string, token: string): RegisterResult {
+  const configPath = getGeminiConfigPath();
+  try {
+    let config: any = {};
+    if (existsSync(configPath)) {
+      const raw = readFileSync(configPath, "utf-8");
+      try {
+        config = JSON.parse(raw);
+      } catch (e: any) {
+        return {
+          ok: false,
+          error: `Could not parse existing Gemini config: ${e.message}. Fix or delete ${configPath} and try again.`,
+        };
+      }
+    } else {
+      mkdirSync(join(configPath, ".."), { recursive: true });
+    }
+
+    if (!config.mcpServers) config.mcpServers = {};
+    config.mcpServers["canvas-agent"] = {
+      command: "npx",
+      args: ["-y", "canvas-agent"],
+      env: {
+        CANVAS_API_URL: apiUrl,
+        CANVAS_API_TOKEN: token,
+      },
+    };
+
+    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+    try {
+      chmodSync(configPath, 0o600);
+    } catch {
+      // Best effort — Windows doesn't honor Unix modes.
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e.message || "unknown error writing Gemini config" };
+  }
+}
+
 function printManualConfig(apiUrl: string) {
-  console.log(yellow("\n  Add this to your Claude MCP configuration:\n"));
+  console.log(yellow("\n  Add this to your MCP configuration"));
+  console.log(
+    yellow("  ") +
+      dim("(~/.gemini/settings.json, Claude Desktop config, or equivalent):") +
+      "\n"
+  );
   const config = {
     "canvas-agent": {
       command: "npx",
@@ -607,8 +671,14 @@ export async function runSetup(): Promise<void> {
 
     const hasClaudeCode = isClaudeCodeInstalled();
     const hasClaudeDesktop = isClaudeDesktopInstalled();
+    const hasGeminiCli = isGeminiCliInstalled();
 
-    console.log("  Checking your Claude setup...\n");
+    console.log("  Checking your setup...\n");
+    console.log(
+      (hasGeminiCli ? green("  ✓") : dim("  ✗")) +
+        " Gemini CLI " +
+        (hasGeminiCli ? "" : dim("(not found)"))
+    );
     console.log(
       (hasClaudeCode ? green("  ✓") : dim("  ✗")) +
         " Claude Code " +
@@ -621,14 +691,17 @@ export async function runSetup(): Promise<void> {
     );
     console.log();
 
-    if (!hasClaudeCode && !hasClaudeDesktop) {
+    if (!hasGeminiCli && !hasClaudeCode && !hasClaudeDesktop) {
       console.log(
-        yellow("  ⚠") + " Canvas Agent needs either Claude Code or Claude Desktop."
+        yellow("  ⚠") + " Canvas Agent needs one of: Gemini CLI, Claude Code, or Claude Desktop."
       );
       console.log();
-      console.log("  " + bold("Install one (or both) and then re-run this wizard:"));
+      console.log("  " + bold("Install one (or more) and then re-run this wizard:"));
       console.log();
-      console.log("  " + bold("Claude Code") + dim(" — terminal-based, works in any folder"));
+      console.log("  " + bold("Gemini CLI") + dim(" — Google's terminal assistant (recommended)"));
+      console.log("    " + bold("npm install -g @google/gemini-cli"));
+      console.log();
+      console.log("  " + bold("Claude Code") + dim(" — Anthropic's terminal assistant"));
       console.log("    " + bold("npm install -g @anthropic-ai/claude-code"));
       if (platform === "darwin") {
         console.log(
@@ -757,7 +830,7 @@ export async function runSetup(): Promise<void> {
     let scopeChoice: ScopeChoice = { scope: "user" };
     if (hasClaudeCode) {
       try {
-        scopeChoice = await chooseScope(rl, hasClaudeDesktop);
+        scopeChoice = await chooseScope(rl, hasClaudeDesktop || hasGeminiCli);
       } catch (e: any) {
         console.log(red("  ✗") + ` ${e.message}\n`);
         console.log("  Re-run this wizard when you're ready:");
@@ -777,8 +850,24 @@ export async function runSetup(): Promise<void> {
     // abort the other — users should get whatever we can successfully
     // install for them, and we report per-target results so they can see
     // exactly what happened.
+    let geminiResult: RegisterResult | null = null;
     let codeResult: RegisterResult | null = null;
     let desktopResult: RegisterResult | null = null;
+
+    if (hasGeminiCli) {
+      console.log("  Configuring Gemini CLI...");
+      geminiResult = registerWithGeminiCli(apiUrl, token);
+      if (geminiResult.ok) {
+        console.log(green("  ✓") + " Gemini CLI\n");
+      } else {
+        console.log(yellow("  ⚠") + " Gemini CLI — could not configure.");
+        const detail = geminiResult.error
+          .split("\n")
+          .map((l) => `    ${l}`)
+          .join("\n");
+        console.log(dim(detail) + "\n");
+      }
+    }
 
     if (hasClaudeCode) {
       console.log("  Registering with Claude Code...");
@@ -812,12 +901,13 @@ export async function runSetup(): Promise<void> {
 
     const codeOk = codeResult?.ok ?? false;
     const desktopOk = desktopResult?.ok ?? false;
+    const geminiOk = geminiResult?.ok ?? false;
 
     // If NOTHING succeeded, fall back to printing the config for manual install.
-    if (!codeOk && !desktopOk) {
+    if (!codeOk && !desktopOk && !geminiOk) {
       console.log(red("  ✗") + " Canvas Agent could not be installed automatically.\n");
       printManualConfig(apiUrl);
-      console.log("  Copy the JSON above and add it to your Claude configuration.");
+      console.log("  Copy the JSON above and add it to your MCP client's configuration.");
       console.log("  For help, visit: " + cyan("https://hughsibbele.github.io/Canvas-Agent") + "\n");
       return;
     }
@@ -830,20 +920,31 @@ export async function runSetup(): Promise<void> {
     console.log();
 
     // Summary of where Canvas Agent ended up
-    if (codeOk && desktopOk) {
-      console.log(
-        bold("  Canvas Agent is installed in both Claude Code and Claude Desktop.")
-      );
-    } else if (codeOk) {
-      console.log(bold("  Canvas Agent is installed in Claude Code."));
-    } else {
-      console.log(bold("  Canvas Agent is installed in Claude Desktop."));
-    }
+    const installedIn: string[] = [];
+    if (geminiOk) installedIn.push("Gemini CLI");
+    if (codeOk) installedIn.push("Claude Code");
+    if (desktopOk) installedIn.push("Claude Desktop");
+
+    const installedList =
+      installedIn.length === 1
+        ? installedIn[0]
+        : installedIn.length === 2
+        ? `${installedIn[0]} and ${installedIn[1]}`
+        : `${installedIn.slice(0, -1).join(", ")}, and ${installedIn[installedIn.length - 1]}`;
+
+    console.log(bold(`  Canvas Agent is installed in ${installedList}.`));
     console.log();
 
     // Per-target launch instructions. We show every surface that succeeded
     // so the user knows how to reach Canvas Agent from whichever tool they
     // prefer to open first.
+    if (geminiOk) {
+      console.log("  " + bold("To use it in Gemini CLI:"));
+      console.log("    1. Open Terminal and type: " + bold("gemini"));
+      console.log('    2. Try asking: ' + dim('"List my Canvas courses"'));
+      console.log();
+    }
+
     if (codeOk) {
       console.log("  " + bold("To use it in Claude Code:"));
       if (scopeChoice.scope === "user") {

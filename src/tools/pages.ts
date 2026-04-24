@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
+import { rehydrateText } from "../anonymizer.js";
 
 export function registerPageTools(server: McpServer) {
   server.tool(
@@ -73,7 +74,11 @@ export function registerPageTools(server: McpServer) {
         ),
     },
     async ({ course_id, title, body, published, front_page, editing_roles }) => {
-      const wiki_page: Record<string, any> = { title, body, published };
+      const wiki_page: Record<string, any> = {
+        title: rehydrateText(title, course_id),
+        body: rehydrateText(body, course_id),
+        published,
+      };
       if (front_page !== undefined) wiki_page.front_page = front_page;
       if (editing_roles) wiki_page.editing_roles = editing_roles;
 
@@ -110,8 +115,8 @@ export function registerPageTools(server: McpServer) {
     },
     async ({ course_id, url_or_id, title, body, published, front_page }) => {
       const wiki_page: Record<string, any> = {};
-      if (title !== undefined) wiki_page.title = title;
-      if (body !== undefined) wiki_page.body = body;
+      if (title !== undefined) wiki_page.title = rehydrateText(title, course_id);
+      if (body !== undefined) wiki_page.body = rehydrateText(body, course_id);
       if (published !== undefined) wiki_page.published = published;
       if (front_page !== undefined) wiki_page.front_page = front_page;
 

@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
+import { rehydrateText } from "../anonymizer.js";
 
 export function registerCalendarTools(server: McpServer) {
   server.tool(
@@ -74,7 +75,7 @@ export function registerCalendarTools(server: McpServer) {
             title,
             start_at,
             end_at,
-            description,
+            description: rehydrateText(description, course_id),
             location_name,
             location_address,
           },
@@ -103,9 +104,12 @@ export function registerCalendarTools(server: McpServer) {
       location_name: z.string().optional(),
     },
     async ({ event_id, ...params }) => {
+      const calendar_event: Record<string, any> = { ...params };
+      if (calendar_event.description !== undefined)
+        calendar_event.description = rehydrateText(calendar_event.description, null);
       const result = await canvas(`/calendar_events/${event_id}`, {
         method: "PUT",
-        body: JSON.stringify({ calendar_event: params }),
+        body: JSON.stringify({ calendar_event }),
       });
       return {
         content: [

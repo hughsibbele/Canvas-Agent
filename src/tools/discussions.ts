@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
+import { rehydrateText } from "../anonymizer.js";
 
 export function registerDiscussionTools(server: McpServer) {
   server.tool(
@@ -87,6 +88,8 @@ export function registerDiscussionTools(server: McpServer) {
     },
     async ({ course_id, points_possible, assignment_group_id, due_at, unlock_at, lock_at, ...params }) => {
       const body: any = { ...params };
+      if (body.title !== undefined) body.title = rehydrateText(body.title, course_id);
+      if (body.message !== undefined) body.message = rehydrateText(body.message, course_id);
       // If grading fields are provided, nest them under assignment
       if (points_possible != null) {
         body.assignment = {
@@ -124,9 +127,14 @@ export function registerDiscussionTools(server: McpServer) {
       published: z.boolean().optional(),
     },
     async ({ course_id, discussion_id, ...params }) => {
+      const payload: Record<string, any> = { ...params };
+      if (payload.title !== undefined)
+        payload.title = rehydrateText(payload.title, course_id);
+      if (payload.message !== undefined)
+        payload.message = rehydrateText(payload.message, course_id);
       const result = await canvas(
         `/courses/${course_id}/discussion_topics/${discussion_id}`,
-        { method: "PUT", body: JSON.stringify(params) }
+        { method: "PUT", body: JSON.stringify(payload) }
       );
       return {
         content: [
@@ -152,12 +160,15 @@ export function registerDiscussionTools(server: McpServer) {
       }),
     },
     async ({ course_id, discussion_ids, updates }) => {
+      const payload: Record<string, any> = { ...updates };
+      if (payload.message !== undefined)
+        payload.message = rehydrateText(payload.message, course_id);
       const results: string[] = [];
       for (const id of discussion_ids) {
         try {
           const result = await canvas(
             `/courses/${course_id}/discussion_topics/${id}`,
-            { method: "PUT", body: JSON.stringify(updates) }
+            { method: "PUT", body: JSON.stringify(payload) }
           );
           results.push(`  OK: "${result.title}" (${id})`);
         } catch (e: any) {

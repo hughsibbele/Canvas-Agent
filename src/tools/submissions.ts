@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll, fetchCanvasFile } from "../canvas-client.js";
+import { lookupByUserId } from "../vault.js";
 import { writeFile, mkdir, chmod } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -91,9 +92,12 @@ export function registerSubmissionTools(server: McpServer) {
           continue;
         }
 
+        // sub.user.* is tokenized by the anonymizer; pull the real
+        // sortable_name from the vault so local folders are readable.
+        const vaultRow = lookupByUserId(course_id, sub.user_id);
         const studentName = (
-          sub.user?.sortable_name ??
-          sub.user?.name ??
+          vaultRow?.sortable_name ??
+          vaultRow?.name ??
           `user_${sub.user_id}`
         ).replace(/[^a-zA-Z0-9_\- ]/g, "");
 

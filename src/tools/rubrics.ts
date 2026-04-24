@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
+import { rehydrateText } from "../anonymizer.js";
 
 export function registerRubricTools(server: McpServer) {
   server.tool(
@@ -346,7 +347,9 @@ export function registerRubricTools(server: McpServer) {
       for (const cs of criterion_scores) {
         rubricAssessment[cs.criterion_id] = {
           points: cs.points,
-          ...(cs.comments ? { comments: cs.comments } : {}),
+          ...(cs.comments
+            ? { comments: rehydrateText(cs.comments, course_id) }
+            : {}),
         };
       }
 
