@@ -3,3 +3,11 @@ dist/
 .env
 .DS_Store
 .claude/settings.local.json
+
+# Student data — never commit. Canvas Agent's download_submissions and
+# download_discussion_entries default to ./downloads, and ad-hoc analysis
+# reports tend to land at repo root.
+downloads/
+reports/
+private/
+*_Report.md
