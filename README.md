@@ -19,11 +19,11 @@ AI client (Claude Code / Claude Desktop / Gemini CLI)
 
 | Component | Path | Role |
 |---|---|---|
-| MCP server | `src/index.ts` | Registers 15 tool modules with the MCP SDK |
-| Canvas API client | `src/canvas-client.ts` | Thin fetch wrapper with automatic pagination and rate-limit backoff |
+| MCP server | `src/index.ts` | Registers 17 tool modules with the MCP SDK |
+| Canvas API client | `src/canvas-client.ts` | Thin fetch wrapper with automatic pagination and rate-limit backoff. Pipes every response through anonymizer → name-detector → sandbox before returning. |
 | Tool modules | `src/tools/*.ts` | One file per Canvas domain — each exports a `register*Tools(server)` function |
-| Anonymizer / vault | `src/anonymizer.ts`, `src/vault.ts` | Token-swap student PII at the MCP boundary; map lives in `~/.canvas-agent/vault/` |
-| CLI entry point | `src/cli.ts` | `npx canvas-agent` starts the server; `npx canvas-agent setup` runs the wizard; `npx canvas-agent reveal <token>` decodes tokens |
+| Privacy pipeline | `src/anonymizer.ts`, `src/name-detector.ts`, `src/sandbox.ts`, `src/vault.ts` | Three-stage redaction at the MCP boundary: token-swap structured PII fields, redact student names inside free text, wrap untrusted content with prompt-injection delimiters. Per-course vault tracks role (student/teacher/unknown); teachers are exempt. Map lives in `~/.canvas-agent/vault/`. |
+| CLI entry point | `src/cli.ts` | `npx canvas-agent` starts the server; `setup` runs the wizard; `reveal <token>` decodes tokens; `vault-gc` prunes orphan vault rows. |
 | Setup wizard | `src/setup.ts` | Interactive CLI that validates credentials, detects Claude Code / Desktop / Gemini CLI, and registers the MCP server |
 | Landing site | `docs/` | Static GitHub Pages site with the end-user setup guide |
 
@@ -44,6 +44,8 @@ AI client (Claude Code / Claude Desktop / Gemini CLI)
 | Calendar | `calendar.ts` | CRUD calendar events |
 | Files | `files.ts` | List/get/update/delete files, folders, quota |
 | Enrollments | `enrollments.ts` | List students, user profiles, student enrollments |
+| Communication | `communication.ts` | Inbox messages, announcements, submission comments |
+| Groups | `groups.ts` | Group sets, groups, membership, auto-distribute |
 | Analytics | `analytics.ts` | Course activity/assignment analytics, student summaries/activity/messaging |
 | Scheduling | `scheduling.ts` | Course schedule overview |
 
@@ -69,27 +71,42 @@ node dist/cli.js setup   # run setup wizard
 
 Each tool module follows the same pattern — define Zod input schemas and register them with `server.tool()`. Look at any existing module for the template.
 
-## Privacy — student name anonymization
+## Privacy & safety pipeline
 
-By default, Canvas-Agent swaps student names, emails, and login IDs for opaque tokens (`Student_<6 hex>`) before Canvas responses reach Claude, so PII never enters the model context. The mapping lives only on the teacher's machine at `~/.canvas-agent/vault/<canvas-host>/<course_id>.json` (chmod 600).
+Every Canvas response flows through a three-stage redaction pipeline in `canvas-client.ts` before it reaches the AI assistant:
 
-On the write path — comments, announcements, messages, page/assignment/discussion bodies — tokens are rehydrated to real names before hitting Canvas, so comments and emails still go out correctly addressed.
+1. **Structured PII anonymizer** (`src/anonymizer.ts`). Walks the response and swaps student names, emails, login IDs, SIS ids, etc. for opaque tokens (`Student_<6 hex>`) on every user-shaped object. Records each user in a per-course vault keyed by Canvas user_id, with a derived role tag.
+2. **Free-text name detector** (`src/name-detector.ts`). Scans free-text fields (discussion bodies, submission prose, comments, descriptions, filenames) for any known student's full name or sortable form (`"Jane Doe"` / `"Doe, Jane"`) and replaces matches with the student's existing token. Uses Unicode-aware boundaries so names with apostrophes (`O'Brien`) and hyphens (`Smith-Jones`) match correctly. Per-course regex is cached and invalidated when the vault changes.
+3. **Prompt-injection sandbox** (`src/sandbox.ts`). Wraps the same set of free-text fields with per-process nonce delimiters (`<untrusted-canvas-content-NONCE>…</untrusted-canvas-content-NONCE>`) so a downstream LLM treats student-authored content as data, not instructions. The nonce is process-random — a student can't guess it to forge a closing tag and "break out" of the sandbox.
 
-To look up the real student behind a token:
+On the write path, `rehydrateText` swaps tokens back to real names and strips any sandbox markers the LLM may have echoed back, so comments and announcements go out correctly addressed and don't leak protection markers into Canvas.
+
+### Roles — teachers stay readable
+
+The vault tags each user as `student`, `teacher`, or `unknown`. Roles are derived from enrollment context (`enrollments[].type`, `grader_*` / `assessor` / `edited_by` / `graded_by` field positions) and merged monotonically (`teacher > student > unknown`, never downgrades). **Known teachers skip tokenization entirely** — their real names pass through to the AI. This keeps workflows like "did I grade this?" working and avoids treating staff as the subject of privacy protection.
+
+### CLI tools
 
 ```bash
-canvas-agent reveal Student_a4f2c1              # scan all courses
+canvas-agent reveal Student_a4f2c1              # decode a token (any course)
 canvas-agent reveal Student_a4f2c1 --course 42  # single course
+canvas-agent reveal --all --course 42           # dump every entry for a course
+
+canvas-agent vault-gc                           # dry-run report of orphan vault rows
+canvas-agent vault-gc --apply                   # actually prune them
+canvas-agent vault-gc --course 42 --verbose     # scope + show student-by-student detail
 ```
 
-Opt out by setting `CANVAS_AGENT_ANONYMIZE=0` in your environment before launching the server.
+`vault-gc` cleans up orphan rows that accumulated under the pre-1.5.0 `id`-vs-`user_id` bug, where each discussion entry / submission / comment minted a phantom vault row keyed by entry id instead of user id. Default mode is dry-run.
 
-**Known v1 gaps:**
+The whole pipeline can be disabled with `CANVAS_AGENT_ANONYMIZE=0` (turns off both anonymization and free-text name detection) or `CANVAS_AGENT_SANDBOX=0` (turns off only the prompt-injection wrapper).
 
-- Free-text fields (discussion post bodies, submission prose, uploaded-file contents, arbitrary HTML in pages) are not scanned. If a student name appears inside a discussion post, it passes through unchanged.
-- `search_term` queries hit Canvas's real-name index. If Claude sends a token, Canvas finds nothing — reveal offline and search by `user_id` instead.
-- `download_discussion_entries` writes entry bodies to disk verbatim. Those files stay on your local machine, but still contain the real names.
-- Account-level endpoints (`/accounts/*`, `/conversations` lists) are not tokenized — they don't carry student PII in v1.
+### Limits worth knowing
+
+- `search_term` queries hit Canvas's real-name index. If the AI sends a token, Canvas finds nothing — reveal offline and search by `user_id` instead.
+- `download_submissions` writes submission attachments (Word docs, PDFs, etc.) as raw bytes to disk by design. Those files contain real student names and submission content; they stay on your local machine but aren't redacted.
+- The free-text name detector matches only the full name and sortable form. First-name-only and last-name-only references go through unchanged (deliberate — too many false positives on common English words).
+- Account-level endpoints (`/accounts/*`, top-level `/conversations` lists) carry no per-course context, so the per-course vault doesn't apply to them.
 
 ## Canvas API gotchas
 

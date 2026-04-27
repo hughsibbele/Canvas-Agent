@@ -8,10 +8,15 @@ The target audience is **non-technical educators**. Many users will be setting u
 
 ### Architecture
 
-- **MCP server** (`src/index.ts`) — Registers 15 tool modules with the MCP SDK, communicates via stdio transport
-- **Canvas API client** (`src/canvas-client.ts`) — Thin wrapper with automatic pagination, rate-limit backoff, and bearer token auth. Reads `CANVAS_API_URL` and `CANVAS_API_TOKEN` from environment variables.
+- **MCP server** (`src/index.ts`) — Registers 17 tool modules with the MCP SDK, communicates via stdio transport
+- **Canvas API client** (`src/canvas-client.ts`) — Thin wrapper with automatic pagination, rate-limit backoff, and bearer token auth. Reads `CANVAS_API_URL` and `CANVAS_API_TOKEN` from environment variables. Routes every response through the privacy pipeline (anonymizer → name detector → sandbox) before returning.
 - **Tool modules** (`src/tools/*.ts`) — One file per Canvas domain (assignments, grading, modules, etc.). Each exports a `register*Tools(server)` function.
-- **CLI entry point** (`src/cli.ts`) — Dispatcher: `npx canvas-agent` starts the MCP server; `npx canvas-agent setup` runs the setup wizard.
+- **Privacy pipeline** — Three stages, all hooked off the chokepoint in `canvas-client.ts`:
+  - `src/anonymizer.ts` — token-swaps user-shaped objects (`name`, `email`, `sortable_name`, `login_id`, sibling `grader_*`/`assessor_*`/`editor_*` pairs, nested `user`/`graded_by`/`edited_by`/`assessor`).
+  - `src/name-detector.ts` — replaces known student names inside free-text fields with their tokens; uses Unicode-aware word boundaries.
+  - `src/sandbox.ts` — wraps free-text fields with per-process nonce delimiters so a downstream LLM treats student-authored content as data, not instructions.
+  - `src/vault.ts` — per-course token store at `~/.canvas-agent/vault/<host>/<course_id>.json` (chmod 600). Tracks role (`student`/`teacher`/`unknown`) merged monotonically (`teacher > student > unknown`). Known teachers skip tokenization. `extractUserId(user)` is the canonical "which user does this row reference?" helper — prefers `user_id` over `id` to handle Canvas's pattern of `{ id: <entry_id>, user_id: <real_user_id> }` correctly.
+- **CLI entry point** (`src/cli.ts`) — Dispatcher: `npx canvas-agent` starts the MCP server; `setup` runs the setup wizard; `reveal <token>` decodes tokens; `vault-gc` prunes orphan vault rows (default dry-run, `--apply` to write).
 - **Setup wizard** (`src/setup.ts`) — Interactive CLI that guides users through connecting Canvas to Claude. Validates credentials, registers the MCP server via `claude mcp add` or Claude Desktop config fallback.
 - **Landing site** (`docs/`) — Static GitHub Pages site with setup guide, feature overview, and FAQ.
 
@@ -54,6 +59,7 @@ A few things worth knowing when adding or updating tools:
 - **Grading periods scope grades and submissions to a single semester/term.** Pass `grading_period_id` to `/courses/{id}/enrollments` (returns per-period `current_score`/`current_grade` instead of lifetime) and to `/courses/{id}/students/submissions` (returns only submissions whose assignments are in that period). Without it, you get cumulative data — which is wrong for any year-long course where the second semester resets the gradebook. The `list_grading_periods` tool surfaces the available period ids.
 - **The `/courses/{id}/grading_periods` endpoint returns a wrapped response** — `{"grading_periods": [...], "meta": {...}}` — so `canvasAll` won't flatten it correctly. Use `canvas` and unwrap manually (see `list_grading_periods` in `tools/courses.ts` for the pattern).
 - **The Canvas analytics endpoints (`get_student_summaries`, `get_course_assignment_analytics`, `get_student_assignment_data`) do NOT support `grading_period_id`** — they always return lifetime totals. If you need semester-scoped tardiness or per-assignment data, fetch submissions directly with `grading_period_id` instead of relying on analytics.
+- **Canvas convention: `id` is a row's own primary key; `<thing>_id` is a foreign key.** A discussion entry / submission / submission_comment has shape `{ id: <entry_id>, user_id: <real_user_id>, user_name: "..." }`. When you need the user this row *references*, always use `user_id` — never `id`. The `extractUserId(user)` helper in `vault.ts` enforces this. Getting it wrong mints phantom vault rows keyed by entry id.
 
 ## TODO
 
