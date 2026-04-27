@@ -32,12 +32,19 @@ function parseArgs(argv: string[]): ParsedArgs {
 function formatHit(
   host: string,
   courseId: string,
-  record: { name?: string; email?: string; user_id: string; token?: string }
+  record: {
+    name?: string;
+    email?: string;
+    user_id: string;
+    token?: string;
+    role?: string;
+  }
 ): string {
   const namePart = record.name ?? "(no name)";
   const trailing = [record.email].filter(Boolean).join(" ");
   const tokenPart = record.token ? ` [${record.token}]` : "";
-  return `${host} / course ${courseId} / user_id ${record.user_id}${tokenPart}: ${namePart}${trailing ? " " + trailing : ""}`;
+  const rolePart = record.role && record.role !== "unknown" ? ` <${record.role}>` : "";
+  return `${host} / course ${courseId} / user_id ${record.user_id}${tokenPart}${rolePart}: ${namePart}${trailing ? " " + trailing : ""}`;
 }
 
 function usage(): never {

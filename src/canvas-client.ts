@@ -7,6 +7,8 @@ import {
   extractCourseIdFromPath,
   isAnonymizationEnabled,
 } from "./anonymizer.js";
+import { redactNamesInResponse } from "./name-detector.js";
+import { sandboxResponse } from "./sandbox.js";
 
 const BASE_URL = process.env.CANVAS_API_URL;
 const TOKEN = process.env.CANVAS_API_TOKEN;
@@ -71,10 +73,15 @@ export async function canvas(
   // Some endpoints (DELETE) return 204 with no body
   if (res.status === 204) return { success: true };
   const data = await res.json();
-  if (isAnonymizationEnabled()) {
-    return anonymizeResponse(data, extractCourseIdFromPath(path));
-  }
-  return data;
+  const courseId = extractCourseIdFromPath(path);
+  // Pipeline: structured PII first (also populates the per-course vault),
+  // then student-name redaction in free-text fields (uses the now-fresh
+  // vault), then sandbox-wrap so any wrapped text is already redacted.
+  const anonymized = isAnonymizationEnabled()
+    ? anonymizeResponse(data, courseId)
+    : data;
+  const namesRedacted = redactNamesInResponse(anonymized, courseId);
+  return sandboxResponse(namesRedacted);
 }
 
 /**
@@ -113,7 +120,9 @@ export async function canvasAll(
       throw new Error(`Canvas API ${res.status}: ${body}`);
     }
     const raw = await res.json();
-    const data = anon ? anonymizeResponse(raw, courseId) : raw;
+    const anonymized = anon ? anonymizeResponse(raw, courseId) : raw;
+    const namesRedacted = redactNamesInResponse(anonymized, courseId);
+    const data = sandboxResponse(namesRedacted);
     results.push(...(Array.isArray(data) ? data : [data]));
     url = getNextUrl(res.headers.get("link"));
   }

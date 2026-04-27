@@ -8,6 +8,9 @@ if (command === "setup") {
 } else if (command === "reveal") {
   const { runReveal } = await import("./reveal.js");
   await runReveal();
+} else if (command === "vault-gc") {
+  const { runVaultGc } = await import("./vault-gc.js");
+  await runVaultGc();
 } else {
   await import("./index.js");
 }

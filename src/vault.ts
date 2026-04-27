@@ -17,8 +17,11 @@ const VAULT_ROOT = path.join(ROOT, "vault");
 const SALT_PATH = path.join(ROOT, "salt");
 const GLOBAL_COURSE = "_global";
 
+export type Role = "student" | "teacher" | "unknown";
+
 export interface UserRecord {
   token: string;
+  role?: Role;
   name?: string;
   sortable_name?: string;
   short_name?: string;
@@ -33,6 +36,19 @@ export interface UserRecord {
   pronouns?: string;
   bio?: string;
   primary_email?: string;
+}
+
+// teacher > student > unknown — a stronger signal can promote, never demote.
+const ROLE_PRIORITY: Record<Role, number> = {
+  teacher: 2,
+  student: 1,
+  unknown: 0,
+};
+
+function mergeRole(existing: Role | undefined, incoming: Role | undefined): Role {
+  const e = existing ?? "unknown";
+  const i = incoming ?? "unknown";
+  return ROLE_PRIORITY[i] > ROLE_PRIORITY[e] ? i : e;
 }
 
 export interface CourseVault {
@@ -60,6 +76,18 @@ const TOKEN_FIELDS: (keyof UserRecord)[] = [
 let cachedSalt: Buffer | null = null;
 let cachedHostname: string | null = null;
 const courseCache = new Map<string, CourseVault>();
+
+// Bumped on every write so callers (e.g. the name detector) can cache derived
+// data per course and invalidate when the vault changes.
+const courseVaultVersion = new Map<string, number>();
+
+export function getVaultVersion(courseId: string): number {
+  return courseVaultVersion.get(courseId) ?? 0;
+}
+
+function bumpVaultVersion(courseId: string) {
+  courseVaultVersion.set(courseId, getVaultVersion(courseId) + 1);
+}
 
 function ensureDir(p: string) {
   fs.mkdirSync(p, { recursive: true, mode: 0o700 });
@@ -115,6 +143,21 @@ function deriveToken(courseId: string, userId: string): string {
   return `Student_${mac.digest("hex").slice(0, 6)}`;
 }
 
+/**
+ * Pull the actual Canvas user id off a user-shaped object. Canvas convention:
+ * a row's own primary key is `id`; references to other rows are `<thing>_id`.
+ * So when both are present (discussion entry, submission, enrollment, comment,
+ * …) the row is *not* a User — it's something that *references* a User, and
+ * `user_id` is the real identifier we care about. Falling back to `id` covers
+ * the pure-User-row case (e.g. /users/:id) where there's no `user_id` at all.
+ */
+export function extractUserId(
+  user: Record<string, unknown>
+): string | number | null {
+  const v = user.user_id ?? user.id;
+  return v == null ? null : (v as string | number);
+}
+
 function readCourseFile(courseId: string): Record<string, UserRecord> {
   const file = courseFile(courseId);
   try {
@@ -154,9 +197,10 @@ export function loadCourseVault(courseId: string): CourseVault {
 
 export function recordUser(
   courseId: string,
-  user: Record<string, unknown>
+  user: Record<string, unknown>,
+  role?: Role
 ): string | null {
-  const rawId = user.id ?? user.user_id;
+  const rawId = extractUserId(user);
   if (rawId == null) return null;
   const userId = String(rawId);
   const vault = loadCourseVault(courseId);
@@ -172,12 +216,14 @@ export function recordUser(
   if (!record.token) {
     record.token = deriveToken(courseId, userId);
   }
+  record.role = mergeRole(existing?.role, role);
 
   // Nothing actually changed → skip the write.
   const unchanged =
     existing &&
     TOKEN_FIELDS.every((f) => existing[f] === record[f]) &&
-    existing.token === record.token;
+    existing.token === record.token &&
+    existing.role === record.role;
   if (unchanged) return record.token;
 
   vault.byUserId.set(userId, record);
@@ -186,6 +232,7 @@ export function recordUser(
   const rows = readCourseFile(courseId);
   rows[userId] = record;
   writeCourseFile(courseId, rows);
+  bumpVaultVersion(courseId);
   return record.token;
 }
 
@@ -203,6 +250,34 @@ export function lookupByUserId(
 ): UserRecord | null {
   const vault = loadCourseVault(courseId);
   return vault.byUserId.get(String(userId)) ?? null;
+}
+
+/** List course-id files present in the current host's vault directory. */
+export function listCoursesForCurrentHost(): string[] {
+  return listCourseIdsForHost(hostname());
+}
+
+/**
+ * Drop the named user-id rows from a course's vault file. Returns the count
+ * actually removed. Used by the vault-gc cleanup to prune orphan rows that
+ * were created before the user_id-vs-id bug fix.
+ */
+export function removeUsers(courseId: string, userIds: string[]): number {
+  if (userIds.length === 0) return 0;
+  const rows = readCourseFile(courseId);
+  let removed = 0;
+  for (const id of userIds) {
+    if (id in rows) {
+      delete rows[id];
+      removed++;
+    }
+  }
+  if (removed > 0) {
+    writeCourseFile(courseId, rows);
+    courseCache.delete(courseId);
+    bumpVaultVersion(courseId);
+  }
+  return removed;
 }
 
 function listHostDirs(): string[] {
