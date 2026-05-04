@@ -224,12 +224,6 @@ export function registerRubricTools(server: McpServer) {
         .boolean()
         .optional()
         .describe("If true, graders write free-form comments per criterion instead of selecting a rating"),
-      skip_updating_points_possible: z
-        .boolean()
-        .optional()
-        .describe(
-          "If true, leave the rubric's points_possible total unchanged even when criterion points change. Useful when refining rating language without re-pegging the gradebook total."
-        ),
     },
     async ({
       course_id,
@@ -237,7 +231,6 @@ export function registerRubricTools(server: McpServer) {
       title,
       criteria,
       free_form_criterion_comments,
-      skip_updating_points_possible,
     }) => {
       // Canvas's PUT replaces fields wholesale: omitting `title` resets it
       // to a default, omitting `criteria` wipes them. To make partial
@@ -252,12 +245,10 @@ export function registerRubricTools(server: McpServer) {
       if (free_form_criterion_comments !== undefined) {
         body.rubric.free_form_criterion_comments = free_form_criterion_comments;
       }
-      // skip_updating_points_possible is a top-level param on Canvas's PUT,
-      // *not* nested under rubric[] — confirmed by testing (a nested copy
-      // gets silently ignored and the total still updates).
-      if (skip_updating_points_possible !== undefined) {
-        body.skip_updating_points_possible = skip_updating_points_possible;
-      }
+      // Note: Canvas exposes skip_updating_points_possible as a documented
+      // PUT parameter, but live testing showed both placements broken —
+      // nested under rubric[] is silently ignored, and at the top level
+      // Canvas returns a 500. Not exposing it until Canvas fixes it.
 
       // When using fetched criteria, descriptions come back sandbox-wrapped
       // by the privacy pipeline; cleanDescription strips those markers so we
