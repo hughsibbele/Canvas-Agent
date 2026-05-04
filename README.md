@@ -19,8 +19,8 @@ AI client (Claude Code / Claude Desktop / Gemini CLI)
 
 | Component | Path | Role |
 |---|---|---|
-| MCP server | `src/index.ts` | Registers 17 tool modules with the MCP SDK |
-| Canvas API client | `src/canvas-client.ts` | Thin fetch wrapper with automatic pagination and rate-limit backoff. Pipes every response through anonymizer → name-detector → sandbox before returning. |
+| MCP server | `src/index.ts` | Registers 18 tool modules with the MCP SDK |
+| Canvas API client | `src/canvas-client.ts` | Thin fetch wrapper with automatic pagination (`canvasAll` for flat array endpoints, `canvasAllWrapped` for `{key: [...], linked: {…}}` shapes) and rate-limit backoff. Pipes every response through anonymizer → name-detector → sandbox before returning. |
 | Tool modules | `src/tools/*.ts` | One file per Canvas domain — each exports a `register*Tools(server)` function |
 | Privacy pipeline | `src/anonymizer.ts`, `src/name-detector.ts`, `src/sandbox.ts`, `src/vault.ts` | Three-stage redaction at the MCP boundary: token-swap structured PII fields, redact student names inside free text, wrap untrusted content with prompt-injection delimiters. Per-course vault tracks role (student/teacher/unknown); teachers are exempt. Map lives in `~/.canvas-agent/vault/`. |
 | CLI entry point | `src/cli.ts` | `npx canvas-agent` starts the server; `setup` runs the wizard; `reveal <token>` decodes tokens; `vault-gc` prunes orphan vault rows. |
@@ -35,7 +35,8 @@ AI client (Claude Code / Claude Desktop / Gemini CLI)
 | Assignments | `assignments.ts` | CRUD assignments, batch update dates |
 | Submissions | `submissions.ts` | List/download submissions, submission summaries, missing submissions |
 | Grading | `grading.ts` | Grade submissions, bulk grade, grade with rubric, post/hide grades |
-| Rubrics | `rubrics.ts` | CRUD rubrics, associate/remove from assignments, view assessments |
+| Rubrics | `rubrics.ts` | CRUD rubrics, copy rubrics across assignments/courses, associate/remove on assignments with display toggles (hide_points / hide_score_total / hide_outcome_results), link criteria to learning outcomes, view/edit/delete rubric assessments |
+| Outcomes | `outcomes.ts` | List learning outcomes and outcome groups in a course, get outcome details, list per-assessment outcome results, get mastery rollups (per-student or class-wide aggregate) |
 | Modules | `modules.ts` | CRUD modules and module items, publish modules |
 | Pages | `pages.ts` | CRUD pages, front page, page revisions |
 | Discussions | `discussions.ts` | CRUD discussions, download entries |

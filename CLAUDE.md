@@ -9,7 +9,7 @@ The target audience is **non-technical educators**. Many users will be setting u
 ### Architecture
 
 - **MCP server** (`src/index.ts`) — Registers 18 tool modules with the MCP SDK, communicates via stdio transport
-- **Canvas API client** (`src/canvas-client.ts`) — Thin wrapper with automatic pagination, rate-limit backoff, and bearer token auth. Reads `CANVAS_API_URL` and `CANVAS_API_TOKEN` from environment variables. Routes every response through the privacy pipeline (anonymizer → name detector → sandbox) before returning.
+- **Canvas API client** (`src/canvas-client.ts`) — Thin wrapper with automatic pagination, rate-limit backoff, and bearer token auth. Reads `CANVAS_API_URL` and `CANVAS_API_TOKEN` from environment variables. Routes every response through the privacy pipeline (anonymizer → name detector → sandbox) before returning. Two paginators: `canvasAll(path, params)` for endpoints that return a flat JSON array, and `canvasAllWrapped(path, arrayKey, params)` for endpoints that wrap their array under a key (`{outcome_results: [...], linked: {…}}`, `{rollups: [...], meta: {…}}`) — concatenates the array across pages and merges sibling metadata deduped by id.
 - **Tool modules** (`src/tools/*.ts`) — One file per Canvas domain (assignments, grading, modules, etc.). Each exports a `register*Tools(server)` function.
 - **Privacy pipeline** — Three stages, all hooked off the chokepoint in `canvas-client.ts`:
   - `src/anonymizer.ts` — token-swaps user-shaped objects (`name`, `email`, `sortable_name`, `login_id`, sibling `grader_*`/`assessor_*`/`editor_*` pairs, nested `user`/`graded_by`/`edited_by`/`assessor`).
@@ -57,9 +57,13 @@ rm -rf ~/.npm/_npx && /mcp to reconnect
 A few things worth knowing when adding or updating tools:
 
 - **Grading periods scope grades and submissions to a single semester/term.** Pass `grading_period_id` to `/courses/{id}/enrollments` (returns per-period `current_score`/`current_grade` instead of lifetime) and to `/courses/{id}/students/submissions` (returns only submissions whose assignments are in that period). Without it, you get cumulative data — which is wrong for any year-long course where the second semester resets the gradebook. The `list_grading_periods` tool surfaces the available period ids.
-- **The `/courses/{id}/grading_periods` endpoint returns a wrapped response** — `{"grading_periods": [...], "meta": {...}}` — so `canvasAll` won't flatten it correctly. Use `canvas` and unwrap manually (see `list_grading_periods` in `tools/courses.ts` for the pattern).
+- **Wrapped responses** — Some endpoints return `{key: [...], linked: {...}, meta: {...}}` instead of a flat array. `canvasAll` won't paginate them correctly. Two patterns: for single-page lookups use `canvas()` and unwrap manually (see `list_grading_periods` in `tools/courses.ts`); for paginated wrapped responses use `canvasAllWrapped(path, arrayKey, params)` (see `list_outcome_results` and `get_outcome_rollups` in `tools/outcomes.ts`).
 - **The Canvas analytics endpoints (`get_student_summaries`, `get_course_assignment_analytics`, `get_student_assignment_data`) do NOT support `grading_period_id`** — they always return lifetime totals. If you need semester-scoped tardiness or per-assignment data, fetch submissions directly with `grading_period_id` instead of relying on analytics.
 - **Canvas convention: `id` is a row's own primary key; `<thing>_id` is a foreign key.** A discussion entry / submission / submission_comment has shape `{ id: <entry_id>, user_id: <real_user_id>, user_name: "..." }`. When you need the user this row *references*, always use `user_id` — never `id`. The `extractUserId(user)` helper in `vault.ts` enforces this. Getting it wrong mints phantom vault rows keyed by entry id.
+- **Read-then-write must strip sandbox markers.** Free-text fields (`description`, `body`, `message`, `comment`, etc.) come back wrapped with `<untrusted-canvas-content-NONCE>...</untrusted-canvas-content-NONCE>` from the privacy pipeline. If a tool fetches one of those fields and writes it back to Canvas (e.g. `update_rubric` re-sending fetched criteria, `copy_rubric` cloning a source), it must call `unsandboxText` from `sandbox.ts` first — otherwise Canvas stores the literal marker text and every subsequent read wraps it again, double-wrapping until the Canvas UI shows the markers as raw content. See the `cleanDescription` helper in `tools/rubrics.ts` for the pattern (`unsandboxText(value).trim()`).
+- **Canvas's PUT replaces fields wholesale on rubrics.** Omitting `rubric[title]` resets the title to a Canvas default; omitting `rubric[criteria]` wipes them. Partial-update tools must always fetch the current state and default any unspecified fields from it (see `update_rubric`).
+- **Rubrics fork on update once they're in use.** When a rubric has graded assessments or other "in use" markers, Canvas marks it `read_only: true`. A subsequent PUT doesn't update in place — it creates a new rubric with a fresh ID. The new ID appears in `list_rubrics` but `get_rubric` 404s on it (and so does `delete_rubric`'s safety-check fetch). Phantoms are harmless cruft; the user can clear them via the Canvas UI. Don't spend cycles trying to manage them.
+- **`skip_updating_points_possible` doesn't work.** Canvas documents this PUT parameter for `/courses/:id/rubrics/:id` but live testing showed both placements broken: nested under `rubric[]` is silently ignored and the total still updates; at the body root Canvas returns 500 when criteria are also being updated. Removed from the tool surface; revisit if Canvas fixes the API.
 
 ## TODO
 
@@ -69,7 +73,6 @@ A few things worth knowing when adding or updating tools:
 - Test the full setup flow on a clean machine or with a non-technical colleague to find friction points.
 
 ### Should-do
-- Add a LICENSE file (package.json says MIT but no LICENSE file exists)
 - Review `course-build-transcript.md` — it's in the public repo and may contain school-specific details
 - Add the walkthrough video and/or screenshots to the landing site
 - Write a troubleshooting section for common issues (expired tokens, wrong Canvas URL, school firewalls)
