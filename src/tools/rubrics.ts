@@ -2,6 +2,18 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 import { rehydrateText } from "../anonymizer.js";
+import { unsandboxText } from "../sandbox.js";
+
+/**
+ * Strip sandbox markers (and the surrounding whitespace our wrap adds) from
+ * a free-text field that was fetched from Canvas and is about to be sent
+ * back. Without this, Canvas stores the marker text verbatim and every
+ * subsequent read wraps it again — corrupting the rubric for UI users.
+ */
+function cleanDescription(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return (unsandboxText(value) ?? "").trim();
+}
 
 export function registerRubricTools(server: McpServer) {
   server.tool(
@@ -227,32 +239,41 @@ export function registerRubricTools(server: McpServer) {
       free_form_criterion_comments,
       skip_updating_points_possible,
     }) => {
-      const body: any = { rubric: {} };
+      // Canvas's PUT replaces fields wholesale: omitting `title` resets it
+      // to a default, omitting `criteria` wipes them. To make partial
+      // updates safe we always fetch the current state and use it as the
+      // default for any field the caller didn't supply.
+      const existing = await canvas(
+        `/courses/${course_id}/rubrics/${rubric_id}`
+      );
 
-      if (title !== undefined) body.rubric.title = title;
+      const body: any = { rubric: {} };
+      body.rubric.title = title ?? existing.title;
       if (free_form_criterion_comments !== undefined) {
         body.rubric.free_form_criterion_comments = free_form_criterion_comments;
       }
+      // skip_updating_points_possible is a top-level param on Canvas's PUT,
+      // *not* nested under rubric[] — confirmed by testing (a nested copy
+      // gets silently ignored and the total still updates).
       if (skip_updating_points_possible !== undefined) {
-        body.rubric.skip_updating_points_possible =
-          skip_updating_points_possible;
+        body.skip_updating_points_possible = skip_updating_points_possible;
       }
 
-      // Canvas's PUT replaces criteria with whatever is in the body — so an
-      // omitted `criteria` field wipes all of them. To make partial updates
-      // safe, fetch the existing criteria and re-send them when the caller
-      // didn't supply replacements.
-      const criteriaSource =
-        criteria ??
-        (await canvas(`/courses/${course_id}/rubrics/${rubric_id}`)).data ??
-        [];
+      // When using fetched criteria, descriptions come back sandbox-wrapped
+      // by the privacy pipeline; cleanDescription strips those markers so we
+      // don't write them back to Canvas. When the caller supplies criteria,
+      // descriptions are clean already (cleanDescription is a no-op).
+      const usingFetched = !criteria;
+      const criteriaSource = criteria ?? existing.data ?? [];
 
       const criteriaObj: Record<string, any> = {};
       criteriaSource.forEach((c: any, i: number) => {
         const ratingsObj: Record<string, any> = {};
         (c.ratings ?? []).forEach((r: any, j: number) => {
           ratingsObj[String(j)] = {
-            description: r.description,
+            description: usingFetched
+              ? cleanDescription(r.description)
+              : r.description,
             points: r.points,
             ...(r.long_description
               ? { long_description: r.long_description }
@@ -260,7 +281,9 @@ export function registerRubricTools(server: McpServer) {
           };
         });
         criteriaObj[String(i)] = {
-          description: c.description,
+          description: usingFetched
+            ? cleanDescription(c.description)
+            : c.description,
           long_description: c.long_description ?? "",
           points: c.points,
           ratings: ratingsObj,
@@ -686,12 +709,15 @@ export function registerRubricTools(server: McpServer) {
         return assoc;
       };
 
+      // Source data was fetched via canvas() so description fields come back
+      // sandbox-wrapped — clean them before sending to the create endpoint
+      // or Canvas would store the wrapped strings.
       const criteriaObj: Record<string, any> = {};
       (source.data ?? []).forEach((c: any, i: number) => {
         const ratingsObj: Record<string, any> = {};
         (c.ratings ?? []).forEach((r: any, j: number) => {
           ratingsObj[String(j)] = {
-            description: r.description,
+            description: cleanDescription(r.description),
             points: r.points,
             ...(r.long_description
               ? { long_description: r.long_description }
@@ -699,7 +725,7 @@ export function registerRubricTools(server: McpServer) {
           };
         });
         criteriaObj[String(i)] = {
-          description: c.description,
+          description: cleanDescription(c.description),
           long_description: c.long_description ?? "",
           points: c.points,
           ratings: ratingsObj,
