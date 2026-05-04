@@ -27,14 +27,42 @@ export function registerRubricTools(server: McpServer) {
 
   server.tool(
     "get_rubric",
-    "Get full details of a rubric, including all criteria and their rating scales. The returned criterion IDs (e.g. '_7998') are needed by grade_with_rubric.",
+    "Get full details of a rubric, including all criteria and their rating scales. The returned criterion IDs (e.g. '_7998') are needed by grade_with_rubric. Pass include=['assessments'] to also retrieve every rubric_assessment row (with their IDs) — that's how you find the rubric_association_id and assessment_id needed by update_rubric_assessment / delete_rubric_assessment.",
     {
       course_id: z.string().describe("Canvas course ID"),
       rubric_id: z.string().describe("Rubric ID"),
+      include: z
+        .array(
+          z.enum([
+            "assignment_associations",
+            "course_associations",
+            "account_associations",
+            "associations",
+            "assessments",
+            "graded_assessments",
+            "peer_assessments",
+          ])
+        )
+        .optional()
+        .describe(
+          "Optional includes. Defaults to ['assignment_associations']. Use 'assessments' (or 'graded_assessments' / 'peer_assessments') to embed individual rubric_assessment rows."
+        ),
+      style: z
+        .enum(["full", "comments_only"])
+        .optional()
+        .describe(
+          "Assessment style filter. Only meaningful when include contains an *assessments variant. 'comments_only' strips numeric scores and returns just comments."
+        ),
     },
-    async ({ course_id, rubric_id }) => {
+    async ({ course_id, rubric_id, include, style }) => {
+      const includes = include?.length
+        ? include
+        : ["assignment_associations"];
+      const params = new URLSearchParams();
+      for (const inc of includes) params.append("include[]", inc);
+      if (style) params.append("style", style);
       const rubric = await canvas(
-        `/courses/${course_id}/rubrics/${rubric_id}?include[]=assignment_associations`
+        `/courses/${course_id}/rubrics/${rubric_id}?${params.toString()}`
       );
       return {
         content: [{ type: "text", text: JSON.stringify(rubric, null, 2) }],
@@ -44,7 +72,7 @@ export function registerRubricTools(server: McpServer) {
 
   server.tool(
     "create_rubric",
-    "Create a new rubric in a course. Provide criteria as an array of objects, each with a description and an array of ratings (description + points). Optionally associate with an assignment immediately.",
+    "Create a new rubric in a course. Provide criteria as an array of objects, each with a description and an array of ratings (description + points). Optionally associate with an assignment immediately. Criteria can be linked to learning outcomes via learning_outcome_id (use list_outcomes to find IDs) — when linked, the criterion's mastery feeds into outcome rollups.",
     {
       course_id: z.string().describe("Canvas course ID"),
       title: z.string().describe("Rubric title"),
@@ -63,9 +91,21 @@ export function registerRubricTools(server: McpServer) {
                 points: z.number().describe("Point value for this rating"),
               })
             ),
+            learning_outcome_id: z
+              .string()
+              .optional()
+              .describe(
+                "Optional: link this criterion to a learning outcome. Mastery against this criterion feeds the outcome's rollup. The outcome must be linked to this course (see list_outcomes)."
+              ),
           })
         )
         .describe("Array of rubric criteria with their rating scales"),
+      free_form_criterion_comments: z
+        .boolean()
+        .optional()
+        .describe(
+          "If true, graders write free-form comments per criterion instead of selecting from the rating scale"
+        ),
       assignment_id: z
         .string()
         .optional()
@@ -73,7 +113,13 @@ export function registerRubricTools(server: McpServer) {
           "If provided, associate this rubric with the assignment and use it for grading"
         ),
     },
-    async ({ course_id, title, criteria, assignment_id }) => {
+    async ({
+      course_id,
+      title,
+      criteria,
+      free_form_criterion_comments,
+      assignment_id,
+    }) => {
       const criteriaObj: Record<string, any> = {};
       criteria.forEach((c, i) => {
         const ratingsObj: Record<string, any> = {};
@@ -88,12 +134,17 @@ export function registerRubricTools(server: McpServer) {
           long_description: c.long_description ?? "",
           points: c.points,
           ratings: ratingsObj,
+          ...(c.learning_outcome_id
+            ? { learning_outcome_id: Number(c.learning_outcome_id) }
+            : {}),
         };
       });
 
-      const body: any = {
-        rubric: { title, criteria: criteriaObj },
-      };
+      const rubricBody: any = { title, criteria: criteriaObj };
+      if (free_form_criterion_comments !== undefined) {
+        rubricBody.free_form_criterion_comments = free_form_criterion_comments;
+      }
+      const body: any = { rubric: rubricBody };
 
       if (assignment_id) {
         body.rubric_association = {
@@ -130,7 +181,7 @@ export function registerRubricTools(server: McpServer) {
 
   server.tool(
     "update_rubric",
-    "Update an existing rubric's title or criteria. Changes apply to all assignments using this rubric.",
+    "Update an existing rubric's title, criteria, or display settings. Changes apply to all assignments using this rubric. If you change only the title (without passing criteria), existing criteria are preserved automatically.",
     {
       course_id: z.string().describe("Canvas course ID"),
       rubric_id: z.string().describe("Rubric ID to update"),
@@ -147,46 +198,91 @@ export function registerRubricTools(server: McpServer) {
                 points: z.number(),
               })
             ),
+            learning_outcome_id: z
+              .string()
+              .optional()
+              .describe(
+                "Optional: link this criterion to a learning outcome (see list_outcomes)"
+              ),
           })
         )
         .optional()
-        .describe("Replacement criteria (replaces all existing criteria)"),
+        .describe("Replacement criteria (replaces all existing criteria). Omit to keep current criteria."),
+      free_form_criterion_comments: z
+        .boolean()
+        .optional()
+        .describe("If true, graders write free-form comments per criterion instead of selecting a rating"),
+      skip_updating_points_possible: z
+        .boolean()
+        .optional()
+        .describe(
+          "If true, leave the rubric's points_possible total unchanged even when criterion points change. Useful when refining rating language without re-pegging the gradebook total."
+        ),
     },
-    async ({ course_id, rubric_id, title, criteria }) => {
+    async ({
+      course_id,
+      rubric_id,
+      title,
+      criteria,
+      free_form_criterion_comments,
+      skip_updating_points_possible,
+    }) => {
       const body: any = { rubric: {} };
 
-      if (title) body.rubric.title = title;
+      if (title !== undefined) body.rubric.title = title;
+      if (free_form_criterion_comments !== undefined) {
+        body.rubric.free_form_criterion_comments = free_form_criterion_comments;
+      }
+      if (skip_updating_points_possible !== undefined) {
+        body.rubric.skip_updating_points_possible =
+          skip_updating_points_possible;
+      }
 
-      if (criteria) {
-        const criteriaObj: Record<string, any> = {};
-        criteria.forEach((c, i) => {
-          const ratingsObj: Record<string, any> = {};
-          c.ratings.forEach((r, j) => {
-            ratingsObj[String(j)] = {
-              description: r.description,
-              points: r.points,
-            };
-          });
-          criteriaObj[String(i)] = {
-            description: c.description,
-            long_description: c.long_description ?? "",
-            points: c.points,
-            ratings: ratingsObj,
+      // Canvas's PUT replaces criteria with whatever is in the body — so an
+      // omitted `criteria` field wipes all of them. To make partial updates
+      // safe, fetch the existing criteria and re-send them when the caller
+      // didn't supply replacements.
+      const criteriaSource =
+        criteria ??
+        (await canvas(`/courses/${course_id}/rubrics/${rubric_id}`)).data ??
+        [];
+
+      const criteriaObj: Record<string, any> = {};
+      criteriaSource.forEach((c: any, i: number) => {
+        const ratingsObj: Record<string, any> = {};
+        (c.ratings ?? []).forEach((r: any, j: number) => {
+          ratingsObj[String(j)] = {
+            description: r.description,
+            points: r.points,
+            ...(r.long_description
+              ? { long_description: r.long_description }
+              : {}),
           };
         });
-        body.rubric.criteria = criteriaObj;
-      }
+        criteriaObj[String(i)] = {
+          description: c.description,
+          long_description: c.long_description ?? "",
+          points: c.points,
+          ratings: ratingsObj,
+          ...(c.id ? { id: c.id } : {}),
+          ...(c.learning_outcome_id
+            ? { learning_outcome_id: Number(c.learning_outcome_id) }
+            : {}),
+        };
+      });
+      body.rubric.criteria = criteriaObj;
 
       const result = await canvas(
         `/courses/${course_id}/rubrics/${rubric_id}`,
         { method: "PUT", body: JSON.stringify(body) }
       );
 
+      const rubric = result.rubric ?? result;
       return {
         content: [
           {
             type: "text",
-            text: `Updated rubric "${result.title}" (ID: ${result.id})`,
+            text: `Updated rubric "${rubric.title}" (ID: ${rubric.id}), ${rubric.data?.length ?? "?"} criteria, ${rubric.points_possible ?? "?"} points total`,
           },
         ],
       };
@@ -241,22 +337,52 @@ export function registerRubricTools(server: McpServer) {
         .boolean()
         .default(true)
         .describe("Whether to use this rubric for grading (default: true)"),
+      hide_score_total: z
+        .boolean()
+        .optional()
+        .describe("Hide the total score in the student/grader view of the rubric"),
+      hide_points: z
+        .boolean()
+        .optional()
+        .describe(
+          "Hide all point values on the rubric (Canvas UI: 'Remove points from rubric'). Useful for non-scoring rubrics."
+        ),
+      hide_outcome_results: z
+        .boolean()
+        .optional()
+        .describe(
+          "Don't post outcome results from this rubric to the Learning Mastery Gradebook. Use when a rubric criterion is outcome-linked but you don't want this assignment to count toward mastery."
+        ),
     },
-    async ({ course_id, rubric_id, assignment_ids, use_for_grading }) => {
+    async ({
+      course_id,
+      rubric_id,
+      assignment_ids,
+      use_for_grading,
+      hide_score_total,
+      hide_points,
+      hide_outcome_results,
+    }) => {
       const results: string[] = [];
       for (const aid of assignment_ids) {
         try {
+          const associationBody: any = {
+            rubric_id: Number(rubric_id),
+            association_type: "Assignment",
+            association_id: Number(aid),
+            use_for_grading,
+            purpose: "grading",
+          };
+          if (hide_score_total !== undefined)
+            associationBody.hide_score_total = hide_score_total;
+          if (hide_points !== undefined)
+            associationBody.hide_points = hide_points;
+          if (hide_outcome_results !== undefined)
+            associationBody.hide_outcome_results = hide_outcome_results;
+
           await canvas(`/courses/${course_id}/rubric_associations`, {
             method: "POST",
-            body: JSON.stringify({
-              rubric_association: {
-                rubric_id: Number(rubric_id),
-                association_type: "Assignment",
-                association_id: Number(aid),
-                use_for_grading,
-                purpose: "grading",
-              },
-            }),
+            body: JSON.stringify({ rubric_association: associationBody }),
           });
           results.push(`  OK: assignment ${aid}`);
         } catch (e: any) {
@@ -268,6 +394,86 @@ export function registerRubricTools(server: McpServer) {
           {
             type: "text",
             text: `Rubric ${rubric_id} association results (${assignment_ids.length} assignments):\n${results.join("\n")}`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "update_rubric_association",
+    "Update the display/grading settings of an existing rubric–assignment association without re-associating. Use this to toggle 'Remove points from rubric' (hide_points), hide the score total, or change use_for_grading. Find the association_id by calling get_rubric (look at assignment_associations) or by reading the assignment's rubric_settings.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      association_id: z
+        .string()
+        .describe("Rubric association ID (NOT the rubric ID or assignment ID)"),
+      use_for_grading: z
+        .boolean()
+        .optional()
+        .describe("Whether the rubric is used for grading"),
+      hide_score_total: z
+        .boolean()
+        .optional()
+        .describe("Hide the total score in the rubric view"),
+      hide_points: z
+        .boolean()
+        .optional()
+        .describe(
+          "Hide all point values on the rubric (Canvas UI: 'Remove points from rubric')"
+        ),
+      hide_outcome_results: z
+        .boolean()
+        .optional()
+        .describe(
+          "Don't post outcome results from this rubric to the Learning Mastery Gradebook"
+        ),
+    },
+    async ({
+      course_id,
+      association_id,
+      use_for_grading,
+      hide_score_total,
+      hide_points,
+      hide_outcome_results,
+    }) => {
+      const associationBody: any = {};
+      if (use_for_grading !== undefined)
+        associationBody.use_for_grading = use_for_grading;
+      if (hide_score_total !== undefined)
+        associationBody.hide_score_total = hide_score_total;
+      if (hide_points !== undefined) associationBody.hide_points = hide_points;
+      if (hide_outcome_results !== undefined)
+        associationBody.hide_outcome_results = hide_outcome_results;
+
+      if (Object.keys(associationBody).length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "No changes specified — pass at least one of use_for_grading, hide_score_total, hide_points, hide_outcome_results.",
+            },
+          ],
+        };
+      }
+
+      const result = await canvas(
+        `/courses/${course_id}/rubric_associations/${association_id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ rubric_association: associationBody }),
+        }
+      );
+
+      const assoc = result.rubric_association ?? result;
+      const changes = Object.entries(associationBody)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Updated rubric association ${assoc.id ?? association_id} (rubric ${assoc.rubric_id ?? "?"} → ${assoc.association_type ?? "?"} ${assoc.association_id ?? "?"}): ${changes}`,
           },
         ],
       };
@@ -376,7 +582,7 @@ export function registerRubricTools(server: McpServer) {
 
   server.tool(
     "get_rubric_assessments",
-    "Get all rubric assessments (grades) for an assignment. Shows how each student was scored on each criterion.",
+    "Get all rubric assessments (grades) for an assignment. Shows how each student was scored on each criterion. Note: this returns the per-criterion data but not the assessment row IDs — for those (needed by update_rubric_assessment / delete_rubric_assessment), call get_rubric with include=['assessments'].",
     {
       course_id: z.string().describe("Canvas course ID"),
       assignment_id: z.string().describe("Assignment ID"),
@@ -404,6 +610,266 @@ export function registerRubricTools(server: McpServer) {
               assessed.length > 0
                 ? JSON.stringify(assessed, null, 2)
                 : "No rubric assessments found for this assignment.",
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "copy_rubric",
+    "Duplicate an existing rubric. Copies title, criteria (with ratings, long descriptions, and outcome links), and free_form_criterion_comments. By default copies into the same course; pass target_course_id to copy across courses. Optionally renames and associates with one or more assignments. Display toggles (hide_score_total / hide_points / hide_outcome_results) are inherited from the source's primary association unless overridden. NOTE: outcome-linked criteria require the same outcome to be available in the target course; if it isn't, Canvas may strip the outcome link.",
+    {
+      source_course_id: z.string().describe("Course ID where the rubric currently lives"),
+      source_rubric_id: z.string().describe("Rubric ID to copy"),
+      target_course_id: z
+        .string()
+        .optional()
+        .describe("Course ID to copy into. Defaults to source_course_id."),
+      new_title: z
+        .string()
+        .optional()
+        .describe("Title for the copy. Defaults to '<original title> (copy)'."),
+      assignment_ids: z
+        .array(z.string())
+        .optional()
+        .describe("Optional: assignment IDs in the target course to associate the copy with."),
+      hide_score_total: z
+        .boolean()
+        .optional()
+        .describe("Override hide_score_total on the new association(s). Defaults to the source's value."),
+      hide_points: z
+        .boolean()
+        .optional()
+        .describe("Override hide_points (Canvas UI: 'Remove points from rubric') on the new association(s). Defaults to the source's value."),
+      hide_outcome_results: z
+        .boolean()
+        .optional()
+        .describe("Override hide_outcome_results on the new association(s). Defaults to the source's value."),
+    },
+    async ({
+      source_course_id,
+      source_rubric_id,
+      target_course_id,
+      new_title,
+      assignment_ids,
+      hide_score_total,
+      hide_points,
+      hide_outcome_results,
+    }) => {
+      const targetCourseId = target_course_id ?? source_course_id;
+      // Pull source rubric *with* assignment_associations so we can inherit
+      // display toggles from its primary association.
+      const source = await canvas(
+        `/courses/${source_course_id}/rubrics/${source_rubric_id}?include[]=assignment_associations`
+      );
+      const sourceAssoc =
+        source.assessments?.[0]?.rubric_association ??
+        source.associations?.[0] ??
+        source.assignment_associations?.[0] ??
+        {};
+
+      const inheritedToggles = {
+        hide_score_total:
+          hide_score_total ?? sourceAssoc.hide_score_total ?? undefined,
+        hide_points: hide_points ?? sourceAssoc.hide_points ?? undefined,
+        hide_outcome_results:
+          hide_outcome_results ?? sourceAssoc.hide_outcome_results ?? undefined,
+      };
+      const applyToggles = (assoc: Record<string, any>) => {
+        if (inheritedToggles.hide_score_total !== undefined)
+          assoc.hide_score_total = inheritedToggles.hide_score_total;
+        if (inheritedToggles.hide_points !== undefined)
+          assoc.hide_points = inheritedToggles.hide_points;
+        if (inheritedToggles.hide_outcome_results !== undefined)
+          assoc.hide_outcome_results = inheritedToggles.hide_outcome_results;
+        return assoc;
+      };
+
+      const criteriaObj: Record<string, any> = {};
+      (source.data ?? []).forEach((c: any, i: number) => {
+        const ratingsObj: Record<string, any> = {};
+        (c.ratings ?? []).forEach((r: any, j: number) => {
+          ratingsObj[String(j)] = {
+            description: r.description,
+            points: r.points,
+            ...(r.long_description
+              ? { long_description: r.long_description }
+              : {}),
+          };
+        });
+        criteriaObj[String(i)] = {
+          description: c.description,
+          long_description: c.long_description ?? "",
+          points: c.points,
+          ratings: ratingsObj,
+          ...(c.learning_outcome_id
+            ? { learning_outcome_id: Number(c.learning_outcome_id) }
+            : {}),
+        };
+      });
+
+      const rubricBody: any = {
+        title: new_title ?? `${source.title} (copy)`,
+        criteria: criteriaObj,
+      };
+      if (source.free_form_criterion_comments !== undefined) {
+        rubricBody.free_form_criterion_comments =
+          source.free_form_criterion_comments;
+      }
+
+      // Create the rubric, associated to the first assignment if any (or to the
+      // course otherwise — this is the same default create_rubric uses).
+      const firstAssignment = assignment_ids?.[0];
+      const body: any = { rubric: rubricBody };
+      if (firstAssignment) {
+        body.rubric_association = applyToggles({
+          association_id: Number(firstAssignment),
+          association_type: "Assignment",
+          use_for_grading: true,
+          purpose: "grading",
+        });
+      } else {
+        body.rubric_association = applyToggles({
+          association_id: Number(targetCourseId),
+          association_type: "Course",
+          use_for_grading: true,
+          purpose: "grading",
+        });
+      }
+
+      const created = await canvas(`/courses/${targetCourseId}/rubrics`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const newRubric = created.rubric ?? created;
+
+      // Associate the remaining assignments (if any).
+      const extras = (assignment_ids ?? []).slice(firstAssignment ? 1 : 0);
+      const associationLines: string[] = [];
+      for (const aid of extras) {
+        try {
+          await canvas(`/courses/${targetCourseId}/rubric_associations`, {
+            method: "POST",
+            body: JSON.stringify({
+              rubric_association: applyToggles({
+                rubric_id: Number(newRubric.id),
+                association_type: "Assignment",
+                association_id: Number(aid),
+                use_for_grading: true,
+                purpose: "grading",
+              }),
+            }),
+          });
+          associationLines.push(`  OK: assignment ${aid}`);
+        } catch (e: any) {
+          associationLines.push(`  FAILED: assignment ${aid} — ${e.message}`);
+        }
+      }
+
+      const summary = [
+        `Copied rubric "${source.title}" → "${newRubric.title}" (new ID: ${newRubric.id}, course ${targetCourseId})`,
+        `${(source.data ?? []).length} criteria, ${newRubric.points_possible} points total`,
+      ];
+      if (firstAssignment)
+        summary.push(`Associated with assignment ${firstAssignment}`);
+      if (associationLines.length)
+        summary.push(
+          `Additional associations:\n${associationLines.join("\n")}`
+        );
+
+      return {
+        content: [{ type: "text", text: summary.join("\n") }],
+      };
+    }
+  );
+
+  server.tool(
+    "update_rubric_assessment",
+    "Edit an existing rubric assessment (e.g. correct one student's rubric grade) without re-grading the whole submission. Find rubric_association_id and assessment_id by calling get_rubric with include=['assessments']. For most grading workflows, grade_with_rubric is simpler — use this tool when you specifically need to surgically edit one row.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      rubric_association_id: z
+        .string()
+        .describe("Rubric association ID (from get_rubric assessments)"),
+      assessment_id: z
+        .string()
+        .describe("Rubric assessment ID (the row's own ID, from get_rubric assessments)"),
+      criterion_scores: z
+        .array(
+          z.object({
+            criterion_id: z.string().describe("Criterion ID (e.g. '_7998')"),
+            points: z.number(),
+            comments: z.string().optional(),
+          })
+        )
+        .describe("Per-criterion scores. Replaces existing per-criterion data."),
+      assessment_type: z
+        .enum(["grading", "peer_review", "provisional_grade"])
+        .optional()
+        .describe("Assessment type. Defaults to 'grading'."),
+    },
+    async ({
+      course_id,
+      rubric_association_id,
+      assessment_id,
+      criterion_scores,
+      assessment_type,
+    }) => {
+      const rubricAssessment: Record<string, any> = {
+        assessment_type: assessment_type ?? "grading",
+      };
+      for (const cs of criterion_scores) {
+        rubricAssessment[cs.criterion_id] = {
+          points: cs.points,
+          ...(cs.comments
+            ? { comments: rehydrateText(cs.comments, course_id) }
+            : {}),
+        };
+      }
+
+      const result = await canvas(
+        `/courses/${course_id}/rubric_associations/${rubric_association_id}/rubric_assessments/${assessment_id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ rubric_assessment: rubricAssessment }),
+        }
+      );
+
+      const assessment = result.rubric_assessment ?? result;
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Updated rubric assessment ${assessment.id ?? assessment_id}: score ${assessment.score ?? "?"} (${criterion_scores.length} criteria)`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "delete_rubric_assessment",
+    "Delete a single rubric assessment row, clearing that student's rubric grade for the assignment without removing the rubric or affecting other students. Find rubric_association_id and assessment_id by calling get_rubric with include=['assessments'].",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      rubric_association_id: z
+        .string()
+        .describe("Rubric association ID (from get_rubric assessments)"),
+      assessment_id: z
+        .string()
+        .describe("Rubric assessment ID to delete (from get_rubric assessments)"),
+    },
+    async ({ course_id, rubric_association_id, assessment_id }) => {
+      await canvas(
+        `/courses/${course_id}/rubric_associations/${rubric_association_id}/rubric_assessments/${assessment_id}`,
+        { method: "DELETE" }
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Deleted rubric assessment ${assessment_id} (association ${rubric_association_id}).`,
           },
         ],
       };

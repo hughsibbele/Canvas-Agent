@@ -131,6 +131,102 @@ export async function canvasAll(
 }
 
 /**
+ * Auto-paginated GET for endpoints that wrap their array in an object,
+ * e.g. `{ outcome_results: [...], linked: {...} }` or
+ * `{ rollups: [...], linked: {...}, meta: {...} }`.
+ *
+ * Returns the merged response object with:
+ *   - `arrayKey` — every page's items concatenated
+ *   - every other top-level key — merged across pages: arrays concat with
+ *     dedup-by-id, nested objects shallow-merged the same way, primitives
+ *     keep the first-page value.
+ *
+ * Each page still flows through the privacy pipeline.
+ */
+export async function canvasAllWrapped(
+  path: string,
+  arrayKey: string,
+  params?: Record<string, string | string[]>
+): Promise<Record<string, any>> {
+  const sep = path.includes("?") ? "&" : "?";
+  const qs = new URLSearchParams();
+  qs.append("per_page", "100");
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (Array.isArray(value)) {
+        for (const v of value) qs.append(key, v);
+      } else {
+        qs.append(key, value);
+      }
+    }
+  }
+  let url: string | null = `${BASE_URL}${path}${sep}${qs.toString()}`;
+  const courseId = extractCourseIdFromPath(path);
+  const anon = isAnonymizationEnabled();
+
+  const items: any[] = [];
+  let merged: Record<string, any> | null = null;
+
+  while (url) {
+    const res = await fetchWithRetry(url, { headers: authHeaders() });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Canvas API ${res.status}: ${body}`);
+    }
+    const raw = await res.json();
+    const anonymized = anon ? anonymizeResponse(raw, courseId) : raw;
+    const namesRedacted = redactNamesInResponse(anonymized, courseId);
+    const data = sandboxResponse(namesRedacted) as Record<string, any>;
+
+    if (Array.isArray(data?.[arrayKey])) {
+      items.push(...data[arrayKey]);
+    }
+    const { [arrayKey]: _drop, ...rest } = data ?? {};
+    merged = merged ? mergePages(merged, rest) : rest;
+
+    url = getNextUrl(res.headers.get("link"));
+  }
+
+  return { ...(merged ?? {}), [arrayKey]: items };
+}
+
+/** Recursive merge for paginated wrapped responses (see canvasAllWrapped). */
+function mergePages(a: any, b: any): any {
+  if (a === undefined || a === null) return b;
+  if (b === undefined || b === null) return a;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const result = [...a];
+    const seenIds = new Set(
+      a
+        .map((x: any) => x?.id)
+        .filter((id: any) => id !== undefined && id !== null)
+    );
+    for (const item of b) {
+      const id = item?.id;
+      if (id !== undefined && id !== null) {
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+      }
+      result.push(item);
+    }
+    return result;
+  }
+  if (
+    typeof a === "object" &&
+    typeof b === "object" &&
+    !Array.isArray(a) &&
+    !Array.isArray(b)
+  ) {
+    const result: Record<string, any> = { ...a };
+    for (const [k, v] of Object.entries(b)) {
+      result[k] = mergePages(result[k], v);
+    }
+    return result;
+  }
+  return a;
+}
+
+/**
  * Download a file from a Canvas-returned URL and return its bytes.
  * Submission attachments come back as full URLs (often pre-signed S3/CDN
  * links), so we centralize the fetch here to share auth, retry, and error

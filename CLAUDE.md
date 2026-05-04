@@ -8,7 +8,7 @@ The target audience is **non-technical educators**. Many users will be setting u
 
 ### Architecture
 
-- **MCP server** (`src/index.ts`) — Registers 17 tool modules with the MCP SDK, communicates via stdio transport
+- **MCP server** (`src/index.ts`) — Registers 18 tool modules with the MCP SDK, communicates via stdio transport
 - **Canvas API client** (`src/canvas-client.ts`) — Thin wrapper with automatic pagination, rate-limit backoff, and bearer token auth. Reads `CANVAS_API_URL` and `CANVAS_API_TOKEN` from environment variables. Routes every response through the privacy pipeline (anonymizer → name detector → sandbox) before returning.
 - **Tool modules** (`src/tools/*.ts`) — One file per Canvas domain (assignments, grading, modules, etc.). Each exports a `register*Tools(server)` function.
 - **Privacy pipeline** — Three stages, all hooked off the chokepoint in `canvas-client.ts`:

@@ -18,6 +18,7 @@ import { registerFileTools } from "./tools/files.js";
 import { registerModuleTools } from "./tools/modules.js";
 import { registerCommunicationTools } from "./tools/communication.js";
 import { registerGroupTools } from "./tools/groups.js";
+import { registerOutcomeTools } from "./tools/outcomes.js";
 
 const server = new McpServer({
   name: "canvas-agent",
@@ -42,6 +43,7 @@ registerFileTools(server);
 registerModuleTools(server);
 registerCommunicationTools(server);
 registerGroupTools(server);
+registerOutcomeTools(server);
 
 // Connect via stdio (Claude Code launches this as a subprocess)
 const transport = new StdioServerTransport();
