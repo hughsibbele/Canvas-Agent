@@ -15,7 +15,7 @@ function cleanDescription(value: unknown): string {
   return (unsandboxText(value) ?? "").trim();
 }
 
-export function registerRubricTools(server: McpServer) {
+export function registerRubricsCore(server: McpServer) {
   server.tool(
     "list_rubrics",
     "List all rubrics in a course. Returns rubric ID, title, point total, and number of criteria.",

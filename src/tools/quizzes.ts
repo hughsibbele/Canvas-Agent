@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 
-export function registerQuizTools(server: McpServer) {
+export function registerQuizzesExtras(server: McpServer) {
   server.tool(
     "list_quizzes",
     "List quizzes in a course. Note: New Quizzes also appear as assignments (with submission_types=['external_tool'] and is_quiz_lti_assignment=true). This endpoint covers Classic Quizzes; use list_assignments to see New Quizzes.",
@@ -86,33 +86,4 @@ export function registerQuizTools(server: McpServer) {
     }
   );
 
-  server.tool(
-    "list_new_quizzes",
-    "List all New Quizzes (Quizzes.Next) in a course by filtering assignments. Returns a summary of each. For full details/settings of a single New Quiz, use get_new_quiz. For question management, use list_quiz_items, create_quiz_item, etc.",
-    {
-      course_id: z.string().describe("Canvas course ID"),
-    },
-    async ({ course_id }) => {
-      const assignments = await canvasAll(
-        `/courses/${course_id}/assignments`
-      );
-      const newQuizzes = assignments
-        .filter((a: any) => a.is_quiz_lti_assignment)
-        .map((a: any) => ({
-          id: a.id,
-          name: a.name,
-          due_at: a.due_at,
-          unlock_at: a.unlock_at,
-          lock_at: a.lock_at,
-          points_possible: a.points_possible,
-          published: a.published,
-          html_url: a.html_url,
-        }));
-      return {
-        content: [
-          { type: "text", text: JSON.stringify(newQuizzes, null, 2) },
-        ],
-      };
-    }
-  );
 }

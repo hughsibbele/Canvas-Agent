@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 
-export function registerAnalyticsTools(server: McpServer) {
+export function registerAnalyticsCore(server: McpServer) {
   server.tool(
     "get_course_activity",
     "Get daily page views and participation analytics for a course. This returns engagement metrics, not assignment data — use list_assignments for assignment info.",
@@ -99,7 +99,9 @@ export function registerAnalyticsTools(server: McpServer) {
       };
     }
   );
+}
 
+export function registerAnalyticsExtras(server: McpServer) {
   server.tool(
     "get_student_messaging_data",
     "Get message counts between instructor and a specific student in a course.",

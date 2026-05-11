@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { canvas, canvasAll, summarizeItem } from "../canvas-client.js";
+import { canvas, canvasAll } from "../canvas-client.js";
 
-export function registerSchedulingTools(server: McpServer) {
+export function registerSchedulingCore(server: McpServer) {
   server.tool(
     "update_assignment_dates",
     "Update due_at, unlock_at, and/or lock_at for a single assignment. Also works for graded discussions and New Quizzes (which are assignments under the hood). Prefer this over update_assignment when you only need to change dates.",
@@ -198,35 +198,6 @@ export function registerSchedulingTools(server: McpServer) {
   );
 
   server.tool(
-    "update_quiz_dates",
-    "Update dates for a classic quiz (not New Quizzes — those are assignments).",
-    {
-      course_id: z.string().describe("Canvas course ID"),
-      quiz_id: z.string().describe("Classic Quiz ID (not assignment ID)"),
-      due_at: z.string().optional().describe("Due date (ISO 8601)"),
-      unlock_at: z.string().optional().describe("Available from (ISO 8601)"),
-      lock_at: z.string().optional().describe("Available until (ISO 8601)"),
-    },
-    async ({ course_id, quiz_id, ...dates }) => {
-      const result = await canvas(
-        `/courses/${course_id}/quizzes/${quiz_id}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({ quiz: dates }),
-        }
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Updated dates for quiz "${result.title}":\n  due_at: ${result.due_at}\n  unlock_at: ${result.unlock_at}\n  lock_at: ${result.lock_at}`,
-          },
-        ],
-      };
-    }
-  );
-
-  server.tool(
     "list_assignment_overrides",
     "List all date overrides (section-specific or student-specific) for an assignment. Use this to discover override IDs before updating them.",
     {
@@ -338,6 +309,37 @@ export function registerSchedulingTools(server: McpServer) {
 
       return {
         content: [{ type: "text", text: JSON.stringify(items, null, 2) }],
+      };
+    }
+  );
+}
+
+export function registerSchedulingExtras(server: McpServer) {
+  server.tool(
+    "update_quiz_dates",
+    "Update dates for a classic quiz (not New Quizzes — those are assignments).",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      quiz_id: z.string().describe("Classic Quiz ID (not assignment ID)"),
+      due_at: z.string().optional().describe("Due date (ISO 8601)"),
+      unlock_at: z.string().optional().describe("Available from (ISO 8601)"),
+      lock_at: z.string().optional().describe("Available until (ISO 8601)"),
+    },
+    async ({ course_id, quiz_id, ...dates }) => {
+      const result = await canvas(
+        `/courses/${course_id}/quizzes/${quiz_id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ quiz: dates }),
+        }
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Updated dates for quiz "${result.title}":\n  due_at: ${result.due_at}\n  unlock_at: ${result.unlock_at}\n  lock_at: ${result.lock_at}`,
+          },
+        ],
       };
     }
   );

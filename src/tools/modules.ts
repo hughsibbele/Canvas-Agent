@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 
-export function registerModuleTools(server: McpServer) {
+export function registerModulesCore(server: McpServer) {
   server.tool(
     "create_module",
     "Create a new module in a course. Use list_modules to see existing modules first.",

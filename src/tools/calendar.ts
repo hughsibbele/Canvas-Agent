@@ -3,7 +3,7 @@ import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 import { rehydrateText } from "../anonymizer.js";
 
-export function registerCalendarTools(server: McpServer) {
+export function registerCalendarCore(server: McpServer) {
   server.tool(
     "list_calendar_events",
     "List calendar events, optionally filtered by course, date range, or type.",

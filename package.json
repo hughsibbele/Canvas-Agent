@@ -1,6 +1,6 @@
 {
   "name": "canvas-agent",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "description": "MCP server for Instructure Canvas LMS — connect Claude AI to your courses",
   "type": "module",
   "bin": {
@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "npm run build && node scripts/assert-tool-routing.mjs"
   },
   "files": [
     "dist/**/*.js",

@@ -3,7 +3,46 @@ import { z } from "zod";
 import { canvas } from "../canvas-client.js";
 import { rehydrateText } from "../anonymizer.js";
 
-export function registerCommunicationTools(server: McpServer) {
+export function registerCommunicationCore(server: McpServer) {
+  server.tool(
+    "post_submission_comment",
+    "Add a comment to a student's submission without changing the grade. Useful for leaving feedback during review or asking for revisions. For comments + grade in one call, use grade_submission with the comment field instead.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      assignment_id: z.string().describe("Assignment ID"),
+      user_id: z.string().describe("Student user ID"),
+      comment: z.string().describe("Comment text"),
+      group_comment: z
+        .boolean()
+        .default(false)
+        .describe(
+          "For group assignments, send the comment to every group member instead of just this user."
+        ),
+    },
+    async ({ course_id, assignment_id, user_id, comment, group_comment }) => {
+      const body = {
+        comment: {
+          text_comment: rehydrateText(comment, course_id),
+          group_comment,
+        },
+      };
+      const result = await canvas(
+        `/courses/${course_id}/assignments/${assignment_id}/submissions/${user_id}`,
+        { method: "PUT", body: JSON.stringify(body) }
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Comment added on submission for user ${user_id}. Submission state: ${result.workflow_state}`,
+          },
+        ],
+      };
+    }
+  );
+}
+
+export function registerCommunicationExtras(server: McpServer) {
   server.tool(
     "send_message",
     "Send a Canvas Inbox (Conversations) message to one or more users. Recipients can be individual users (id strings) or course/section bulk targets (e.g. 'course_1234_students', 'section_5678'). Pass group_conversation=true to put everyone on the same thread; otherwise each recipient gets a separate 1:1 thread.",
@@ -109,43 +148,6 @@ export function registerCommunicationTools(server: McpServer) {
           {
             type: "text",
             text: `Announcement "${result.title}" posted (ID: ${result.id})\n${result.html_url}`,
-          },
-        ],
-      };
-    }
-  );
-
-  server.tool(
-    "post_submission_comment",
-    "Add a comment to a student's submission without changing the grade. Useful for leaving feedback during review or asking for revisions. For comments + grade in one call, use grade_submission with the comment field instead.",
-    {
-      course_id: z.string().describe("Canvas course ID"),
-      assignment_id: z.string().describe("Assignment ID"),
-      user_id: z.string().describe("Student user ID"),
-      comment: z.string().describe("Comment text"),
-      group_comment: z
-        .boolean()
-        .default(false)
-        .describe(
-          "For group assignments, send the comment to every group member instead of just this user."
-        ),
-    },
-    async ({ course_id, assignment_id, user_id, comment, group_comment }) => {
-      const body = {
-        comment: {
-          text_comment: rehydrateText(comment, course_id),
-          group_comment,
-        },
-      };
-      const result = await canvas(
-        `/courses/${course_id}/assignments/${assignment_id}/submissions/${user_id}`,
-        { method: "PUT", body: JSON.stringify(body) }
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Comment added on submission for user ${user_id}. Submission state: ${result.workflow_state}`,
           },
         ],
       };

@@ -5,7 +5,7 @@ import { lookupByUserId } from "../vault.js";
 import { writeFile, mkdir, chmod } from "node:fs/promises";
 import { join } from "node:path";
 
-export function registerSubmissionTools(server: McpServer) {
+export function registerSubmissionsCore(server: McpServer) {
   server.tool(
     "list_submissions",
     "List all submissions for an assignment (including graded discussions and New Quizzes). Shows student name, score, submission status, and submitted_at timestamp.",

@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 
-export function registerFileTools(server: McpServer) {
+export function registerFilesExtras(server: McpServer) {
   server.tool(
     "list_course_files",
     "List files in a course, optionally filtered by search term, content type, or sort order.",

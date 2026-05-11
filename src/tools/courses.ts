@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 
-export function registerCourseTools(server: McpServer) {
+export function registerCoursesCore(server: McpServer) {
   server.tool(
     "list_courses",
     "List Canvas courses you have access to. Returns course IDs needed by all other tools. Shows active courses by default. Admins can use search_term to search all courses in the account.",
@@ -45,6 +45,105 @@ export function registerCourseTools(server: McpServer) {
     }
   );
 
+  server.tool(
+    "list_terms",
+    "List enrollment terms (semesters/quarters) defined in the account. Returns each term's id, name, and start/end dates. Use the returned id as enrollment_term_id in list_term_courses or create_course.",
+    {
+      workflow_state: z
+        .enum(["active", "deleted", "all"])
+        .default("active")
+        .describe("Filter by term workflow state"),
+    },
+    async ({ workflow_state }) => {
+      // /accounts/:id/terms returns a wrapped response: { enrollment_terms: [...] }
+      const raw: any = await canvas(
+        `/accounts/self/terms?workflow_state[]=${workflow_state}&per_page=100`
+      );
+      const terms = (raw?.enrollment_terms ?? []) as any[];
+      const summary = terms.map((t) => ({
+        id: t.id,
+        name: t.name,
+        start_at: t.start_at,
+        end_at: t.end_at,
+        sis_term_id: t.sis_term_id,
+        workflow_state: t.workflow_state,
+      }));
+      return {
+        content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "list_assignment_groups",
+    "List assignment groups (grading categories) in a course with their weights. The returned group IDs are used as assignment_group_id when creating or updating assignments.",
+    { course_id: z.string().describe("Canvas course ID") },
+    async ({ course_id }) => {
+      const groups = await canvasAll(
+        `/courses/${course_id}/assignment_groups`
+      );
+      const summary = groups.map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        position: g.position,
+        group_weight: g.group_weight,
+      }));
+      return {
+        content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "list_modules",
+    "List modules in a course. For module management (create, update, delete, add items), see create_module, update_module, add_module_item, and related tools.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      include_items: z
+        .boolean()
+        .default(false)
+        .describe("Include module items in the response"),
+    },
+    async ({ course_id, include_items }) => {
+      const params: Record<string, string> = {};
+      if (include_items) params.include = "items";
+      const modules = await canvasAll(
+        `/courses/${course_id}/modules`,
+        params
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(modules, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "list_grading_periods",
+    "List the grading periods (e.g. semesters, quarters) defined for a course's term. Returns id, title, start_date, end_date, and is_closed for each period. The returned IDs can be passed as grading_period_id to get_student_enrollments and other grade-related tools to scope grades and submissions to a single period instead of the cumulative lifetime grade. Note: schools that don't use grading periods will get a single default period.",
+    { course_id: z.string().describe("Canvas course ID") },
+    async ({ course_id }) => {
+      // The grading_periods endpoint returns a wrapped response:
+      // {"grading_periods": [...], "meta": {...}}
+      // Use canvas (not canvasAll) and unwrap manually.
+      const raw: any = await canvas(`/courses/${course_id}/grading_periods`);
+      const periods = (raw?.grading_periods ?? []) as any[];
+      const summary = periods.map((p) => ({
+        id: p.id,
+        title: p.title,
+        start_date: p.start_date,
+        end_date: p.end_date,
+        close_date: p.close_date,
+        is_closed: p.is_closed,
+        weight: p.weight,
+      }));
+      return {
+        content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
+      };
+    }
+  );
+}
+
+export function registerCoursesAdmin(server: McpServer) {
   server.tool(
     "list_term_courses",
     "List every course in a given enrollment term across the account (admin only). Useful for term-wide audits — e.g., finding every unpublished course or every section a teacher owns this semester. Discover the enrollment_term_id by running list_courses and reading the term_id field on any course in the desired term.",
@@ -105,35 +204,6 @@ export function registerCourseTools(server: McpServer) {
               })),
             }
           : {}),
-      }));
-      return {
-        content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
-      };
-    }
-  );
-
-  server.tool(
-    "list_terms",
-    "List enrollment terms (semesters/quarters) defined in the account. Returns each term's id, name, and start/end dates. Use the returned id as enrollment_term_id in list_term_courses or create_course.",
-    {
-      workflow_state: z
-        .enum(["active", "deleted", "all"])
-        .default("active")
-        .describe("Filter by term workflow state"),
-    },
-    async ({ workflow_state }) => {
-      // /accounts/:id/terms returns a wrapped response: { enrollment_terms: [...] }
-      const raw: any = await canvas(
-        `/accounts/self/terms?workflow_state[]=${workflow_state}&per_page=100`
-      );
-      const terms = (raw?.enrollment_terms ?? []) as any[];
-      const summary = terms.map((t) => ({
-        id: t.id,
-        name: t.name,
-        start_at: t.start_at,
-        end_at: t.end_at,
-        sis_term_id: t.sis_term_id,
-        workflow_state: t.workflow_state,
       }));
       return {
         content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
@@ -432,74 +502,6 @@ export function registerCourseTools(server: McpServer) {
       });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
-
-  server.tool(
-    "list_assignment_groups",
-    "List assignment groups (grading categories) in a course with their weights. The returned group IDs are used as assignment_group_id when creating or updating assignments.",
-    { course_id: z.string().describe("Canvas course ID") },
-    async ({ course_id }) => {
-      const groups = await canvasAll(
-        `/courses/${course_id}/assignment_groups`
-      );
-      const summary = groups.map((g: any) => ({
-        id: g.id,
-        name: g.name,
-        position: g.position,
-        group_weight: g.group_weight,
-      }));
-      return {
-        content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
-      };
-    }
-  );
-
-  server.tool(
-    "list_modules",
-    "List modules in a course. For module management (create, update, delete, add items), see create_module, update_module, add_module_item, and related tools.",
-    {
-      course_id: z.string().describe("Canvas course ID"),
-      include_items: z
-        .boolean()
-        .default(false)
-        .describe("Include module items in the response"),
-    },
-    async ({ course_id, include_items }) => {
-      const params: Record<string, string> = {};
-      if (include_items) params.include = "items";
-      const modules = await canvasAll(
-        `/courses/${course_id}/modules`,
-        params
-      );
-      return {
-        content: [{ type: "text", text: JSON.stringify(modules, null, 2) }],
-      };
-    }
-  );
-
-  server.tool(
-    "list_grading_periods",
-    "List the grading periods (e.g. semesters, quarters) defined for a course's term. Returns id, title, start_date, end_date, and is_closed for each period. The returned IDs can be passed as grading_period_id to get_student_enrollments and other grade-related tools to scope grades and submissions to a single period instead of the cumulative lifetime grade. Note: schools that don't use grading periods will get a single default period.",
-    { course_id: z.string().describe("Canvas course ID") },
-    async ({ course_id }) => {
-      // The grading_periods endpoint returns a wrapped response:
-      // {"grading_periods": [...], "meta": {...}}
-      // Use canvas (not canvasAll) and unwrap manually.
-      const raw: any = await canvas(`/courses/${course_id}/grading_periods`);
-      const periods = (raw?.grading_periods ?? []) as any[];
-      const summary = periods.map((p) => ({
-        id: p.id,
-        title: p.title,
-        start_date: p.start_date,
-        end_date: p.end_date,
-        close_date: p.close_date,
-        is_closed: p.is_closed,
-        weight: p.weight,
-      }));
-      return {
-        content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
       };
     }
   );

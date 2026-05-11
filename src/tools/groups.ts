@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 
-export function registerGroupTools(server: McpServer) {
+export function registerGroupsExtras(server: McpServer) {
   server.tool(
     "list_group_categories",
     "List the group sets (categories) defined in a course. A group set is a container for related groups (e.g. 'Project Teams'). Use the returned id to create groups inside it or to assign students.",

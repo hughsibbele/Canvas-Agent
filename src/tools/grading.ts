@@ -3,7 +3,7 @@ import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 import { rehydrateText } from "../anonymizer.js";
 
-export function registerGradingTools(server: McpServer) {
+export function registerGradingCore(server: McpServer) {
   server.tool(
     "grade_submission",
     "Grade a single student submission with a score and optional comment. For rubric-based grading, use grade_with_rubric instead. Works for regular assignments, graded discussions (use the assignment_id), and New Quizzes (use the assignment_id).",
@@ -196,76 +196,6 @@ export function registerGradingTools(server: McpServer) {
   );
 
   server.tool(
-    "get_late_policy",
-    "Get the late policy configuration for a course.",
-    {
-      course_id: z.string().describe("Canvas course ID"),
-    },
-    async ({ course_id }) => {
-      const result = await canvas(`/courses/${course_id}/late_policy`);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
-
-  server.tool(
-    "set_late_policy",
-    "Create or update the late policy for a course. Only include fields you want to change.",
-    {
-      course_id: z.string().describe("Canvas course ID"),
-      missing_submission_deduction_enabled: z
-        .boolean()
-        .optional()
-        .describe("Enable automatic deduction for missing submissions"),
-      missing_submission_deduction: z
-        .number()
-        .optional()
-        .describe("Percentage to deduct for missing submissions"),
-      late_submission_deduction_enabled: z
-        .boolean()
-        .optional()
-        .describe("Enable automatic deduction for late submissions"),
-      late_submission_deduction: z
-        .number()
-        .optional()
-        .describe("Percentage to deduct per period for late submissions"),
-      late_submission_interval: z
-        .enum(["day", "hour"])
-        .optional()
-        .describe("Interval for late deduction (day or hour)"),
-      late_submission_minimum_percent_enabled: z
-        .boolean()
-        .optional()
-        .describe("Enable a minimum grade for late submissions"),
-      late_submission_minimum_percent: z
-        .number()
-        .optional()
-        .describe("Minimum percentage a late submission can receive"),
-    },
-    async ({ course_id, ...policyFields }) => {
-      // Filter out undefined values
-      const late_policy: Record<string, any> = {};
-      for (const [key, value] of Object.entries(policyFields)) {
-        if (value !== undefined) late_policy[key] = value;
-      }
-
-      const result = await canvas(`/courses/${course_id}/late_policy`, {
-        method: "PATCH",
-        body: JSON.stringify({ late_policy }),
-      });
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Late policy updated.\n${JSON.stringify(result, null, 2)}`,
-          },
-        ],
-      };
-    }
-  );
-
-  server.tool(
     "post_grades",
     "Post (make visible) grades for an assignment so students can see them. Optionally post for specific students only.",
     {
@@ -329,6 +259,78 @@ export function registerGradingTools(server: McpServer) {
           {
             type: "text",
             text: `Grades hidden for assignment ${assignment_id}.\n${JSON.stringify(result, null, 2)}`,
+          },
+        ],
+      };
+    }
+  );
+}
+
+export function registerGradingExtras(server: McpServer) {
+  server.tool(
+    "get_late_policy",
+    "Get the late policy configuration for a course.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+    },
+    async ({ course_id }) => {
+      const result = await canvas(`/courses/${course_id}/late_policy`);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "set_late_policy",
+    "Create or update the late policy for a course. Only include fields you want to change.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+      missing_submission_deduction_enabled: z
+        .boolean()
+        .optional()
+        .describe("Enable automatic deduction for missing submissions"),
+      missing_submission_deduction: z
+        .number()
+        .optional()
+        .describe("Percentage to deduct for missing submissions"),
+      late_submission_deduction_enabled: z
+        .boolean()
+        .optional()
+        .describe("Enable automatic deduction for late submissions"),
+      late_submission_deduction: z
+        .number()
+        .optional()
+        .describe("Percentage to deduct per period for late submissions"),
+      late_submission_interval: z
+        .enum(["day", "hour"])
+        .optional()
+        .describe("Interval for late deduction (day or hour)"),
+      late_submission_minimum_percent_enabled: z
+        .boolean()
+        .optional()
+        .describe("Enable a minimum grade for late submissions"),
+      late_submission_minimum_percent: z
+        .number()
+        .optional()
+        .describe("Minimum percentage a late submission can receive"),
+    },
+    async ({ course_id, ...policyFields }) => {
+      // Filter out undefined values
+      const late_policy: Record<string, any> = {};
+      for (const [key, value] of Object.entries(policyFields)) {
+        if (value !== undefined) late_policy[key] = value;
+      }
+
+      const result = await canvas(`/courses/${course_id}/late_policy`, {
+        method: "PATCH",
+        body: JSON.stringify({ late_policy }),
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Late policy updated.\n${JSON.stringify(result, null, 2)}`,
           },
         ],
       };

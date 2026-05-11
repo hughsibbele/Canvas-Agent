@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 
-export function registerEnrollmentTools(server: McpServer) {
+export function registerEnrollmentsCore(server: McpServer) {
   server.tool(
     "list_students",
     "List students enrolled in a course with enrollment-specific data (section, activity, last login). For a simpler user list with any role (teachers, TAs, etc.), use list_users_in_course instead.",
@@ -146,6 +146,22 @@ export function registerEnrollmentTools(server: McpServer) {
     }
   );
 
+  server.tool(
+    "get_user_profile",
+    "Get any user's profile information including name, email, and bio. Works for students, teachers, and any Canvas user.",
+    {
+      user_id: z.string().describe("Canvas user ID"),
+    },
+    async ({ user_id }) => {
+      const profile = await canvas(`/users/${user_id}/profile`);
+      return {
+        content: [{ type: "text", text: JSON.stringify(profile, null, 2) }],
+      };
+    }
+  );
+}
+
+export function registerEnrollmentsAdmin(server: McpServer) {
   server.tool(
     "crosslist_section",
     "Move a section from its current course into a different course. Students, submissions, and grades in that section all follow it into the destination course. This is a significant action — confirm with the user before calling, and double-check you have the correct section_id (from list_sections on the source course) and new_course_id (from list_courses). To reverse, use decrosslist_section.",
@@ -474,20 +490,6 @@ export function registerEnrollmentTools(server: McpServer) {
             text: `Moved user ${user_id} into section ${to_section_id} (new enrollment ID: ${result.id}). Old enrollment ${from_enrollment_id} is now inactive.`,
           },
         ],
-      };
-    }
-  );
-
-  server.tool(
-    "get_user_profile",
-    "Get any user's profile information including name, email, and bio. Works for students, teachers, and any Canvas user.",
-    {
-      user_id: z.string().describe("Canvas user ID"),
-    },
-    async ({ user_id }) => {
-      const profile = await canvas(`/users/${user_id}/profile`);
-      return {
-        content: [{ type: "text", text: JSON.stringify(profile, null, 2) }],
       };
     }
   );

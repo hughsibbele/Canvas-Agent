@@ -3,7 +3,7 @@ import { z } from "zod";
 import { canvas, canvasAll, summarizeItem } from "../canvas-client.js";
 import { rehydrateText } from "../anonymizer.js";
 
-export function registerAssignmentTools(server: McpServer) {
+export function registerAssignmentsCore(server: McpServer) {
   server.tool(
     "list_assignments",
     "List assignments in a course. This includes regular assignments, graded discussions, and New Quizzes (which are all assignments internally). Returns summary info (id, name, dates, points). Use get_assignment for full details.",

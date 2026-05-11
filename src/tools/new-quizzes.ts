@@ -9,7 +9,38 @@ function quizApiPath(path: string): string {
   return `/../quiz/v1${path}`;
 }
 
-export function registerNewQuizTools(server: McpServer) {
+export function registerNewQuizzesCore(server: McpServer) {
+  // ── 0. List New Quizzes ────────────────────────────────────────────────
+  server.tool(
+    "list_new_quizzes",
+    "List all New Quizzes (Quizzes.Next) in a course by filtering assignments. Returns a summary of each. For full details/settings of a single New Quiz, use get_new_quiz. For question management, use list_quiz_items, create_quiz_item, etc.",
+    {
+      course_id: z.string().describe("Canvas course ID"),
+    },
+    async ({ course_id }) => {
+      const assignments = await canvasAll(
+        `/courses/${course_id}/assignments`
+      );
+      const newQuizzes = assignments
+        .filter((a: any) => a.is_quiz_lti_assignment)
+        .map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          due_at: a.due_at,
+          unlock_at: a.unlock_at,
+          lock_at: a.lock_at,
+          points_possible: a.points_possible,
+          published: a.published,
+          html_url: a.html_url,
+        }));
+      return {
+        content: [
+          { type: "text", text: JSON.stringify(newQuizzes, null, 2) },
+        ],
+      };
+    }
+  );
+
   // ── 1. Get New Quiz Details ────────────────────────────────────────────
   server.tool(
     "get_new_quiz",

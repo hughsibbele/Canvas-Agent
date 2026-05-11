@@ -3,7 +3,7 @@ import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 import { rehydrateText } from "../anonymizer.js";
 
-export function registerPageTools(server: McpServer) {
+export function registerPagesExtras(server: McpServer) {
   server.tool(
     "list_pages",
     "List all wiki pages in a course. Returns summary info (url, title, published, updated_at). Use get_page for full content.",

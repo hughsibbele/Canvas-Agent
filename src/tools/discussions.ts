@@ -3,7 +3,7 @@ import { z } from "zod";
 import { canvas, canvasAll } from "../canvas-client.js";
 import { rehydrateText } from "../anonymizer.js";
 
-export function registerDiscussionTools(server: McpServer) {
+export function registerDiscussionsCore(server: McpServer) {
   server.tool(
     "list_discussions",
     "List discussion topics in a course. Graded discussions also appear as assignments (with assignment_id in the response). To update dates or points of graded discussions, use update_assignment_dates or update_assignment with the assignment_id.",

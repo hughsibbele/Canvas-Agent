@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { canvas, canvasAll, canvasAllWrapped } from "../canvas-client.js";
 
-export function registerOutcomeTools(server: McpServer) {
+export function registerOutcomesExtras(server: McpServer) {
   server.tool(
     "list_outcomes",
     "List every learning outcome linked to a course, flattened across outcome groups. Each entry includes the outcome's id, title, mastery_points, points_possible, ratings, and the group it lives in. Use this to find learning_outcome_id values for create_rubric / update_rubric criteria.",
