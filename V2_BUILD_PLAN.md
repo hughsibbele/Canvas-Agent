@@ -91,10 +91,13 @@ canvas-agent/                    ← single npm package, name unchanged
       core.ts                    ← imports core registrars, starts MCP server
       admin.ts                   ← imports admin registrars
       extras.ts                  ← imports extras registrars
-    cli.ts                       ← legacy entry; v2 replaces with servers/core.ts
+    cli.ts                       ← becomes the canvas-agent bin's dispatcher:
+                                   handles `setup`, `reveal`, `vault-gc` subcommands;
+                                   delegates the no-subcommand path to servers/core.ts
   package.json:
     "bin": {
-      "canvas-agent":         "dist/servers/core.js",
+      "canvas-agent":         "dist/cli.js",            // dispatches setup/reveal/vault-gc,
+                                                        // falls through to servers/core.ts
       "canvas-agent-admin":   "dist/servers/admin.js",
       "canvas-agent-extras":  "dist/servers/extras.js"
     }
@@ -140,12 +143,11 @@ Goal: split each `register*Tools(server)` into the per-MCP variants without chan
 
 ### Phase 3 — flip the default
 
-1. Repoint the `canvas-agent` bin from `dist/cli.js` to `dist/servers/core.js`.
-2. Delete `cli.ts` (or keep as a hidden `canvas-agent-all` bin during the deprecation window — see "Open questions").
-3. Bump to `2.0.0`. Update README + CLAUDE.md to document the three-MCP architecture.
-4. Tag, publish.
+1. Refactor `cli.ts` so the no-subcommand path delegates to `servers/core.ts` instead of registering all 133 tools. The `setup`, `reveal <token>`, and `vault-gc` subcommands stay on the `canvas-agent` bin unchanged — they're shared utilities, not server-mode commands. After this step, `npx canvas-agent` starts the 79-tool core server; `npx canvas-agent setup` still runs the wizard; `npx canvas-agent reveal <token>` still decodes; `npx canvas-agent vault-gc` still prunes.
+2. Bump to `2.0.0`. Update README + CLAUDE.md to document the three-MCP architecture.
+3. Tag, publish.
 
-**Exit criterion:** `npm install canvas-agent@2` gets the 79-tool core; admin and extras are explicit opt-ins.
+**Exit criterion:** `npm install canvas-agent@2` gets the 79-tool core MCP plus the existing utility subcommands on the same bin; admin and extras are explicit opt-ins via their own bins.
 
 ## Migration & semver
 
@@ -171,4 +173,4 @@ Tools moved out of the default bin are exhaustively listed in the inventory tabl
 - Renaming or refactoring the shared infrastructure (canvas-client, vault, anonymizer). The v2 split is purely a registration-time partition.
 - Changing tool signatures, descriptions, or behavior. Same surface, different containers.
 - New tools.
-- `canvas-cli` (the standalone Gemini CLI). Independent surface; not affected.
+- The setup wizard's auto-detection of AI clients (Gemini CLI, Claude Desktop, Claude Code). Wizard logic stays the same; it just registers the v2 `canvas-agent` bin as before, and users add the admin/extras bins by hand if they want them.
