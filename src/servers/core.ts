@@ -19,6 +19,7 @@ import { registerAnalyticsCore } from "../tools/analytics.js";
 import { registerCalendarCore } from "../tools/calendar.js";
 import { registerModulesCore } from "../tools/modules.js";
 import { registerCommunicationCore } from "../tools/communication.js";
+import { registerMetaCore } from "../tools/meta.js";
 
 const server = new McpServer({
   name: "canvas-agent-core",
@@ -38,6 +39,7 @@ registerAnalyticsCore(server);
 registerCalendarCore(server);
 registerModulesCore(server);
 registerCommunicationCore(server);
+registerMetaCore(server);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -12,5 +12,7 @@ if (command === "setup") {
   const { runVaultGc } = await import("./vault-gc.js");
   await runVaultGc();
 } else {
-  await import("./index.js");
+  // v2: the canvas-agent bin starts the core MCP server (79 tools + describe_canvas_mcps).
+  // Admin and extras are mounted via their own bins (canvas-agent-admin, canvas-agent-extras).
+  await import("./servers/core.js");
 }

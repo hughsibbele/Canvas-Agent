@@ -8,16 +8,24 @@ The target audience is **non-technical educators**. Many users will be setting u
 
 ### Architecture
 
-- **MCP server** (`src/index.ts`) — Registers 18 tool modules with the MCP SDK, communicates via stdio transport
+As of v2, Canvas Agent ships **three MCP servers from one npm package**, split by intent:
+- `canvas-agent` (core, 80 tools) — daily teaching/grading workbench. The default bin.
+- `canvas-agent-admin` (18 tools) — course/section/enrollment lifecycle. Mounted for setup work.
+- `canvas-agent-extras` (36 tools) — outcomes, groups, pages, files, classic quizzes, late policy, messaging, announcements.
+
+The split is registration-time only — all three share the same import graph, vault, anonymizer, etc. Routing rationale and inventory live in `V2_BUILD_PLAN.md`.
+
+- **Server entry points** (`src/servers/{core,admin,extras}.ts`) — Each imports only the registrars matching its bucket and starts an MCP stdio server. `cli.ts` no-subcommand path delegates to `servers/core.ts`.
+- **CLI dispatcher** (`src/cli.ts`) — `npx canvas-agent` starts the core server; `setup`/`reveal`/`vault-gc` subcommands stay on the same bin (shared utilities, not server-mode commands). The `canvas-agent-admin` and `canvas-agent-extras` bins point directly at their server files. **Don't try to "clean up" cli.ts's dual role** — preserving the `npx canvas-agent` UX is load-bearing.
 - **Canvas API client** (`src/canvas-client.ts`) — Thin wrapper with automatic pagination, rate-limit backoff, and bearer token auth. Reads `CANVAS_API_URL` and `CANVAS_API_TOKEN` from environment variables. Routes every response through the privacy pipeline (anonymizer → name detector → sandbox) before returning. Two paginators: `canvasAll(path, params)` for endpoints that return a flat JSON array, and `canvasAllWrapped(path, arrayKey, params)` for endpoints that wrap their array under a key (`{outcome_results: [...], linked: {…}}`, `{rollups: [...], meta: {…}}`) — concatenates the array across pages and merges sibling metadata deduped by id.
-- **Tool modules** (`src/tools/*.ts`) — One file per Canvas domain (assignments, grading, modules, etc.). Each exports a `register*Tools(server)` function.
+- **Tool modules** (`src/tools/*.ts`) — One file per Canvas domain. Mixed-bucket files export per-bucket registrars (e.g. `registerCoursesCore` + `registerCoursesAdmin`); single-bucket files export one (e.g. `registerAssignmentsCore`, `registerOutcomesExtras`). The meta tool `describe_canvas_mcps` lives in `src/tools/meta.ts` and is core-only — it's how the AI discovers admin/extras when a user asks for a tool that isn't loaded.
 - **Privacy pipeline** — Three stages, all hooked off the chokepoint in `canvas-client.ts`:
   - `src/anonymizer.ts` — token-swaps user-shaped objects (`name`, `email`, `sortable_name`, `login_id`, sibling `grader_*`/`assessor_*`/`editor_*` pairs, nested `user`/`graded_by`/`edited_by`/`assessor`).
   - `src/name-detector.ts` — replaces known student names inside free-text fields with their tokens; uses Unicode-aware word boundaries.
   - `src/sandbox.ts` — wraps free-text fields with per-process nonce delimiters so a downstream LLM treats student-authored content as data, not instructions.
   - `src/vault.ts` — per-course token store at `~/.canvas-agent/vault/<host>/<course_id>.json` (chmod 600). Tracks role (`student`/`teacher`/`unknown`) merged monotonically (`teacher > student > unknown`). Known teachers skip tokenization. `extractUserId(user)` is the canonical "which user does this row reference?" helper — prefers `user_id` over `id` to handle Canvas's pattern of `{ id: <entry_id>, user_id: <real_user_id> }` correctly.
-- **CLI entry point** (`src/cli.ts`) — Dispatcher: `npx canvas-agent` starts the MCP server; `setup` runs the setup wizard; `reveal <token>` decodes tokens; `vault-gc` prunes orphan vault rows (default dry-run, `--apply` to write).
-- **Setup wizard** (`src/setup.ts`) — Interactive CLI that guides users through connecting Canvas to Claude. Validates credentials, registers the MCP server via `claude mcp add` or Claude Desktop config fallback.
+- **Setup wizard** (`src/setup.ts`) — Interactive CLI that guides users through connecting Canvas to Claude. Validates credentials, registers all three v2 bins (`canvas-agent`, `canvas-agent-admin`, `canvas-agent-extras`) into Claude Code / Claude Desktop / Gemini CLI. The `BINS` constant + `mcpServerEntry()` helper at the top of the file are the seam — adding/removing bins is one place.
+- **Tool-routing assertion harness** (`scripts/assert-tool-routing.mjs`) — Boots all three split servers via the MCP SDK and asserts each exposes exactly its bucket (80 / 18 / 36) with no cross-server name collisions; also verifies the `canvas-agent` bin equals the core server. Run via `npm test`. The ADMIN/EXTRAS lists in this script are the executable contract for routing — keep in sync with V2_BUILD_PLAN.md.
 - **Landing site** (`docs/`) — Static GitHub Pages site with setup guide, feature overview, and FAQ.
 
 ### Key URLs
@@ -31,11 +39,16 @@ The target audience is **non-technical educators**. Many users will be setting u
 
 ```bash
 npm install
-cp .env.example .env   # add Canvas URL and API token
+cp .env.example .env             # add Canvas URL and API token
 npm run build
-node dist/cli.js       # start MCP server
-node dist/cli.js setup # run setup wizard
+node dist/cli.js                 # start the core MCP server (canvas-agent bin)
+node dist/servers/admin.js       # start admin server directly
+node dist/servers/extras.js      # start extras server directly
+node dist/cli.js setup           # run setup wizard
+npm test                         # boot all three servers, assert routing
 ```
+
+`npm test` is the gate for any tool change — it boots all three split servers and asserts each exposes exactly its bucket. If you move a tool between buckets, update the routing manifest in `scripts/assert-tool-routing.mjs`.
 
 ### Publishing changes
 

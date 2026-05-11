@@ -233,6 +233,23 @@ async function checkCanvasReachability(
 
 type RegisterResult = { ok: true } | { ok: false; error: string };
 
+// v2: the three MCP bins shipped from the canvas-agent package. The setup
+// wizard registers all three by default so users get the full Canvas surface
+// out of the box; users who want to save context can drop admin or extras
+// from their MCP config later.
+const BINS = ["canvas-agent", "canvas-agent-admin", "canvas-agent-extras"] as const;
+
+function mcpServerEntry(bin: string, apiUrl: string, token: string) {
+  return {
+    command: "npx",
+    args: ["-y", bin],
+    env: {
+      CANVAS_API_URL: apiUrl,
+      CANVAS_API_TOKEN: token,
+    },
+  };
+}
+
 // Where to install Canvas Agent. Maps onto Claude Code's MCP scopes:
 //   - "user"  → ~/.claude.json top-level mcpServers; available in every folder
 //   - "local" → ~/.claude.json projects[folderPath].mcpServers; only when
@@ -254,70 +271,66 @@ function registerWithClaudeCode(
     spawnOpts.cwd = scopeChoice.folderPath;
   }
 
-  // If canvas-agent is already registered where we're about to write (e.g.
-  // the user re-runs setup after refreshing their token), remove the old
-  // entry first so add-json doesn't fail with "already exists" and we don't
-  // leave stale credentials on disk.
-  try {
-    execFileSync("claude", ["mcp", "get", "canvas-agent"], spawnOpts);
-    try {
-      execFileSync("claude", ["mcp", "remove", "canvas-agent"], spawnOpts);
-    } catch {
-      // Best effort — if remove fails, add-json below will surface the real error.
-    }
-  } catch {
-    // Not registered in this scope; nothing to remove.
-  }
-
+  // Register all three v2 bins. If any one fails, return that failure but
+  // leave whatever already succeeded in place — the user can re-run setup
+  // to retry the failed bins.
+  //
   // Use `claude mcp add-json` with an argv array (not a shell string) so that:
   //  - Token characters never need shell escaping
   //  - We sidestep the variadic `-e` parsing quirk in `claude mcp add` where
   //    the server name can be swallowed as if it were another env var
-  const serverConfig = {
-    command: "npx",
-    args: ["-y", "canvas-agent"],
-    env: {
-      CANVAS_API_URL: apiUrl,
-      CANVAS_API_TOKEN: token,
-    },
-  };
+  for (const bin of BINS) {
+    // If the bin is already registered where we're about to write (e.g. the
+    // user re-runs setup after refreshing their token), remove the old entry
+    // first so add-json doesn't fail with "already exists" and we don't leave
+    // stale credentials on disk.
+    try {
+      execFileSync("claude", ["mcp", "get", bin], spawnOpts);
+      try {
+        execFileSync("claude", ["mcp", "remove", bin], spawnOpts);
+      } catch {
+        // Best effort — if remove fails, add-json below will surface the real error.
+      }
+    } catch {
+      // Not registered in this scope; nothing to remove.
+    }
 
-  try {
-    execFileSync(
-      "claude",
-      [
-        "mcp",
-        "add-json",
-        "-s",
-        scopeChoice.scope,
-        "canvas-agent",
-        JSON.stringify(serverConfig),
-      ],
-      spawnOpts
-    );
-  } catch (e: any) {
-    const stderr = (
-      e.stderr?.toString() ||
-      e.stdout?.toString() ||
-      e.message ||
-      "unknown error"
-    ).trim();
-    return { ok: false, error: stderr };
-  }
+    try {
+      execFileSync(
+        "claude",
+        [
+          "mcp",
+          "add-json",
+          "-s",
+          scopeChoice.scope,
+          bin,
+          JSON.stringify(mcpServerEntry(bin, apiUrl, token)),
+        ],
+        spawnOpts
+      );
+    } catch (e: any) {
+      const stderr = (
+        e.stderr?.toString() ||
+        e.stdout?.toString() ||
+        e.message ||
+        "unknown error"
+      ).trim();
+      return { ok: false, error: `${bin}: ${stderr}` };
+    }
 
-  // Trust but verify — confirm the entry actually landed. This catches the
-  // rare case where `add-json` exits 0 but the config wasn't written (stale
-  // CLI version, file permission quirks, etc.).
-  try {
-    execFileSync("claude", ["mcp", "get", "canvas-agent"], spawnOpts);
-    return { ok: true };
-  } catch {
-    return {
-      ok: false,
-      error:
-        "Claude Code accepted the configuration but the server isn't showing up in 'claude mcp list'. Try re-running setup, or report this at https://github.com/hughsibbele/Canvas-Agent/issues",
-    };
+    // Trust but verify — confirm the entry actually landed. This catches the
+    // rare case where `add-json` exits 0 but the config wasn't written (stale
+    // CLI version, file permission quirks, etc.).
+    try {
+      execFileSync("claude", ["mcp", "get", bin], spawnOpts);
+    } catch {
+      return {
+        ok: false,
+        error: `Claude Code accepted the ${bin} configuration but it isn't showing up in 'claude mcp list'. Try re-running setup, or report this at https://github.com/hughsibbele/Canvas-Agent/issues`,
+      };
+    }
   }
+  return { ok: true };
 }
 
 // ── Scope selection helpers ───────────────────────────────────────────
@@ -557,14 +570,9 @@ function registerWithDesktop(apiUrl: string, token: string): RegisterResult {
     }
 
     if (!config.mcpServers) config.mcpServers = {};
-    config.mcpServers["canvas-agent"] = {
-      command: "npx",
-      args: ["-y", "canvas-agent"],
-      env: {
-        CANVAS_API_URL: apiUrl,
-        CANVAS_API_TOKEN: token,
-      },
-    };
+    for (const bin of BINS) {
+      config.mcpServers[bin] = mcpServerEntry(bin, apiUrl, token);
+    }
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
     try {
@@ -607,14 +615,9 @@ function registerWithGeminiCli(apiUrl: string, token: string): RegisterResult {
     }
 
     if (!config.mcpServers) config.mcpServers = {};
-    config.mcpServers["canvas-agent"] = {
-      command: "npx",
-      args: ["-y", "canvas-agent"],
-      env: {
-        CANVAS_API_URL: apiUrl,
-        CANVAS_API_TOKEN: token,
-      },
-    };
+    for (const bin of BINS) {
+      config.mcpServers[bin] = mcpServerEntry(bin, apiUrl, token);
+    }
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
     try {
@@ -635,16 +638,10 @@ function printManualConfig(apiUrl: string) {
       dim("(~/.gemini/settings.json, Claude Desktop config, or equivalent):") +
       "\n"
   );
-  const config = {
-    "canvas-agent": {
-      command: "npx",
-      args: ["-y", "canvas-agent"],
-      env: {
-        CANVAS_API_URL: apiUrl,
-        CANVAS_API_TOKEN: "<paste your Canvas token here>",
-      },
-    },
-  };
+  const config: Record<string, ReturnType<typeof mcpServerEntry>> = {};
+  for (const bin of BINS) {
+    config[bin] = mcpServerEntry(bin, apiUrl, "<paste your Canvas token here>");
+  }
   console.log("  " + JSON.stringify(config, null, 2).replace(/\n/g, "\n  "));
   console.log(
     "  " +

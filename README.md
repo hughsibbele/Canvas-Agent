@@ -8,47 +8,134 @@ MCP server that connects AI assistants — Google's Gemini CLI, Claude Code, and
 
 ## Architecture
 
-Canvas Agent is a [Model Context Protocol](https://modelcontextprotocol.io/) server that the AI client launches as a subprocess and communicates with over stdio.
+Canvas Agent ships as **three [MCP](https://modelcontextprotocol.io/) servers from one npm package**, split by intent. The setup wizard registers all three by default; users who want to save context can drop admin or extras from their MCP config.
 
 ```
 AI client (Claude Code / Claude Desktop / Gemini CLI)
-  └─ spawns canvas-agent via npx
-       └─ MCP stdio transport
-            └─ Canvas REST API (bearer token auth)
+  ├─ spawns canvas-agent          (core, 80 tools — daily teaching/grading)
+  ├─ spawns canvas-agent-admin    (18 tools — course/section/enrollment lifecycle)
+  └─ spawns canvas-agent-extras   (36 tools — outcomes, groups, pages, files, messaging, …)
+        └─ MCP stdio transport
+             └─ Canvas REST API (bearer token auth)
 ```
+
+The three bins share a single import graph and a single per-course vault, so anonymization tokens stay consistent across servers. Core also includes a `describe_canvas_mcps` tool so the AI can tell the user which other bin to mount when a needed tool isn't loaded.
 
 | Component | Path | Role |
 |---|---|---|
-| MCP server | `src/index.ts` | Registers 18 tool modules with the MCP SDK |
+| Core MCP entry point | `src/servers/core.ts` | The 79 daily teaching/grading tools + the `describe_canvas_mcps` meta tool |
+| Admin MCP entry point | `src/servers/admin.ts` | The 18 course/section/enrollment lifecycle tools |
+| Extras MCP entry point | `src/servers/extras.ts` | The 36 outcomes/groups/pages/files/messaging/late-policy/classic-quizzes tools |
+| CLI dispatcher | `src/cli.ts` | `npx canvas-agent` starts the core server; `setup`/`reveal`/`vault-gc` subcommands stay on the same bin. The two extra bins (`canvas-agent-admin`, `canvas-agent-extras`) point directly at their server files. |
 | Canvas API client | `src/canvas-client.ts` | Thin fetch wrapper with automatic pagination (`canvasAll` for flat array endpoints, `canvasAllWrapped` for `{key: [...], linked: {…}}` shapes) and rate-limit backoff. Pipes every response through anonymizer → name-detector → sandbox before returning. |
-| Tool modules | `src/tools/*.ts` | One file per Canvas domain — each exports a `register*Tools(server)` function |
+| Tool modules | `src/tools/*.ts` | One file per Canvas domain. Mixed-bucket files export per-bucket registrars (e.g. `registerCoursesCore` + `registerCoursesAdmin`); single-bucket files export one (e.g. `registerAssignmentsCore`). |
 | Privacy pipeline | `src/anonymizer.ts`, `src/name-detector.ts`, `src/sandbox.ts`, `src/vault.ts` | Three-stage redaction at the MCP boundary: token-swap structured PII fields, redact student names inside free text, wrap untrusted content with prompt-injection delimiters. Per-course vault tracks role (student/teacher/unknown); teachers are exempt. Map lives in `~/.canvas-agent/vault/`. |
-| CLI entry point | `src/cli.ts` | `npx canvas-agent` starts the server; `setup` runs the wizard; `reveal <token>` decodes tokens; `vault-gc` prunes orphan vault rows. |
-| Setup wizard | `src/setup.ts` | Interactive CLI that validates credentials, detects Claude Code / Desktop / Gemini CLI, and registers the MCP server |
+| Setup wizard | `src/setup.ts` | Interactive CLI that validates credentials, detects Claude Code / Desktop / Gemini CLI, and registers all three v2 bins. |
+| Tool-routing assertion harness | `scripts/assert-tool-routing.mjs` | Boots all three split servers via the MCP SDK and asserts each exposes exactly its bucket (80 / 18 / 36) with no cross-server name collisions. Run via `npm test`. |
 | Landing site | `docs/` | Static GitHub Pages site with the end-user setup guide |
 
 ### Tool modules
 
-| Module | File | Covers |
-|---|---|---|
-| Courses | `courses.ts` | List courses, grading periods, grading standards, late policy, sections, assignment groups |
-| Assignments | `assignments.ts` | CRUD assignments, batch update dates |
-| Submissions | `submissions.ts` | List/download submissions, submission summaries, missing submissions |
-| Grading | `grading.ts` | Grade submissions, bulk grade, grade with rubric, post/hide grades |
-| Rubrics | `rubrics.ts` | CRUD rubrics, copy rubrics across assignments/courses, associate/remove on assignments with display toggles (hide_points / hide_score_total / hide_outcome_results), link criteria to learning outcomes, view/edit/delete rubric assessments |
-| Outcomes | `outcomes.ts` | List learning outcomes and outcome groups in a course, get outcome details, list per-assessment outcome results, get mastery rollups (per-student or class-wide aggregate) |
-| Modules | `modules.ts` | CRUD modules and module items, publish modules |
-| Pages | `pages.ts` | CRUD pages, front page, page revisions |
-| Discussions | `discussions.ts` | CRUD discussions, download entries |
-| Quizzes | `quizzes.ts` | Classic Quizzes — CRUD, update dates, quiz reports |
-| New Quizzes | `new-quizzes.ts` | New Quizzes — CRUD, quiz items, accommodations |
-| Calendar | `calendar.ts` | CRUD calendar events |
-| Files | `files.ts` | List/get/update/delete files, folders, quota |
-| Enrollments | `enrollments.ts` | List students, user profiles, student enrollments |
-| Communication | `communication.ts` | Inbox messages, announcements, submission comments |
-| Groups | `groups.ts` | Group sets, groups, membership, auto-distribute |
-| Analytics | `analytics.ts` | Course activity/assignment analytics, student summaries/activity/messaging |
-| Scheduling | `scheduling.ts` | Course schedule overview |
+| Module | File | v2 bin(s) | Covers |
+|---|---|---|---|
+| Courses | `courses.ts` | core + admin | core: list courses, terms, assignment groups, modules, grading periods. admin: create/update/delete/conclude/reset/copy course, navigation tabs. |
+| Assignments | `assignments.ts` | core | CRUD assignments, batch update dates |
+| Submissions | `submissions.ts` | core | List/download submissions, missing submissions, accommodations |
+| Grading | `grading.ts` | core + extras | core: grade/bulk-grade/post/hide, missing & gradeable students. extras: late policy, grading standards. |
+| Rubrics | `rubrics.ts` | core | CRUD rubrics, copy across assignments/courses, associate with display toggles, link to outcomes, view/edit/delete assessments |
+| Outcomes | `outcomes.ts` | extras | List outcomes/groups, outcome results, mastery rollups |
+| Modules | `modules.ts` | core | CRUD modules and module items, publish modules |
+| Pages | `pages.ts` | extras | CRUD pages, front page, page revisions |
+| Discussions | `discussions.ts` | core | CRUD discussions, download entries |
+| Quizzes (Classic) | `quizzes.ts` | extras | List/get/update Classic Quizzes |
+| New Quizzes | `new-quizzes.ts` | core | CRUD New Quizzes, quiz items, accommodations, list_new_quizzes |
+| Calendar | `calendar.ts` | core | CRUD calendar events |
+| Files | `files.ts` | extras | List/get/update/delete files, folders, quota |
+| Enrollments | `enrollments.ts` | core + admin | core: list students/sections/users, get profile. admin: crosslist, create/update/delete sections, enroll/drop users, move student. |
+| Communication | `communication.ts` | core + extras | core: post submission comment. extras: send_message, create_announcement. |
+| Groups | `groups.ts` | extras | Group sets, groups, membership, auto-distribute |
+| Analytics | `analytics.ts` | core + extras | core: course/student activity, assignment analytics, student summaries. extras: messaging data. |
+| Scheduling | `scheduling.ts` | core + extras | core: assignment dates, batch updates, overrides, schedule overview. extras: classic-quiz dates. |
+| Meta | `meta.ts` | core | `describe_canvas_mcps` — explains the three-MCP architecture to the AI |
+
+## Migrating from v1.x
+
+v2 splits the v1 single-MCP surface into core / admin / extras. If your existing config has just `canvas-agent`, you'll keep working but lose access to anything that moved out of core. Add the relevant bin to your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "canvas-agent":         { "command": "npx", "args": ["-y", "canvas-agent"] },
+    "canvas-agent-admin":   { "command": "npx", "args": ["-y", "canvas-agent-admin"] },
+    "canvas-agent-extras":  { "command": "npx", "args": ["-y", "canvas-agent-extras"] }
+  }
+}
+```
+
+The setup wizard (`npx canvas-agent setup`) registers all three by default — running it again is the simplest upgrade path.
+
+### Tool → bin lookup (alphabetical)
+
+If you used a tool in v1, this table tells you which v2 bin it lives in. Tools not listed here are in `canvas-agent` (core).
+
+| Tool | v2 bin |
+|---|---|
+| `add_user_to_group` | `canvas-agent-extras` |
+| `auto_distribute_unassigned` | `canvas-agent-extras` |
+| `conclude_course` | `canvas-agent-admin` |
+| `copy_course_content` | `canvas-agent-admin` |
+| `create_announcement` | `canvas-agent-extras` |
+| `create_course` | `canvas-agent-admin` |
+| `create_folder` | `canvas-agent-extras` |
+| `create_group` | `canvas-agent-extras` |
+| `create_group_set` | `canvas-agent-extras` |
+| `create_page` | `canvas-agent-extras` |
+| `create_section` | `canvas-agent-admin` |
+| `crosslist_section` | `canvas-agent-admin` |
+| `decrosslist_section` | `canvas-agent-admin` |
+| `delete_course` | `canvas-agent-admin` |
+| `delete_enrollment` | `canvas-agent-admin` |
+| `delete_file` | `canvas-agent-extras` |
+| `delete_page` | `canvas-agent-extras` |
+| `delete_section` | `canvas-agent-admin` |
+| `enroll_user` | `canvas-agent-admin` |
+| `get_file` | `canvas-agent-extras` |
+| `get_file_quota` | `canvas-agent-extras` |
+| `get_front_page` | `canvas-agent-extras` |
+| `get_grading_standards` | `canvas-agent-extras` |
+| `get_late_policy` | `canvas-agent-extras` |
+| `get_outcome` | `canvas-agent-extras` |
+| `get_outcome_rollups` | `canvas-agent-extras` |
+| `get_page` | `canvas-agent-extras` |
+| `get_quiz` | `canvas-agent-extras` |
+| `get_student_messaging_data` | `canvas-agent-extras` |
+| `list_course_files` | `canvas-agent-extras` |
+| `list_course_tabs` | `canvas-agent-admin` |
+| `list_folders` | `canvas-agent-extras` |
+| `list_group_categories` | `canvas-agent-extras` |
+| `list_groups` | `canvas-agent-extras` |
+| `list_outcome_groups` | `canvas-agent-extras` |
+| `list_outcome_results` | `canvas-agent-extras` |
+| `list_outcomes` | `canvas-agent-extras` |
+| `list_page_revisions` | `canvas-agent-extras` |
+| `list_pages` | `canvas-agent-extras` |
+| `list_quizzes` | `canvas-agent-extras` |
+| `list_term_courses` | `canvas-agent-admin` |
+| `move_student_to_section` | `canvas-agent-admin` |
+| `remove_user_from_group` | `canvas-agent-extras` |
+| `reset_course_content` | `canvas-agent-admin` |
+| `send_message` | `canvas-agent-extras` |
+| `set_late_policy` | `canvas-agent-extras` |
+| `update_course_navigation` | `canvas-agent-admin` |
+| `update_course_settings` | `canvas-agent-admin` |
+| `update_enrollment_state` | `canvas-agent-admin` |
+| `update_file` | `canvas-agent-extras` |
+| `update_page` | `canvas-agent-extras` |
+| `update_quiz` | `canvas-agent-extras` |
+| `update_quiz_dates` | `canvas-agent-extras` |
+| `update_section` | `canvas-agent-admin` |
+
+The vault, anonymizer, and reveal CLI are unchanged — no data migration. You can also ask the AI "describe canvas-agent's MCPs" and it will surface the same info via the `describe_canvas_mcps` tool in core.
 
 ## Development
 
@@ -58,17 +145,22 @@ cd Canvas-Agent
 npm install
 cp .env.example .env     # add your CANVAS_API_URL and CANVAS_API_TOKEN
 npm run build
-node dist/cli.js         # start MCP server
-node dist/cli.js setup   # run setup wizard
+node dist/cli.js                 # start the core MCP server (default canvas-agent bin)
+node dist/servers/admin.js       # start admin server directly
+node dist/servers/extras.js      # start extras server directly
+node dist/cli.js setup           # run the setup wizard
+npm test                         # boot all three servers and assert routing
 ```
 
 `npm run dev` starts `tsc --watch` for iterating on tool modules.
 
 ### Adding a tool
 
-1. Create `src/tools/<domain>.ts` exporting a `register<Domain>Tools(server: McpServer)` function.
-2. Import and call it in `src/index.ts`.
-3. Rebuild (`npm run build`) and restart Claude to pick up the new tools.
+1. Decide which bucket it belongs to (core / admin / extras) — see V2_BUILD_PLAN.md for the rationale on existing tools.
+2. Add the `server.tool(...)` registration to the appropriate `register*Core` / `register*Admin` / `register*Extras` function in `src/tools/<domain>.ts`. Create a new domain file + registrar if needed; export from the file and import/call in the matching `src/servers/<bucket>.ts`.
+3. Update the routing manifest in `scripts/assert-tool-routing.mjs` if the tool lands in admin or extras.
+4. `npm test` to verify.
+5. Rebuild (`npm run build`) and restart your MCP client to pick up the new tool.
 
 Each tool module follows the same pattern — define Zod input schemas and register them with `server.tool()`. Look at any existing module for the template.
 

@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// Assertion harness for the v2 three-MCP refactor.
+// Assertion harness for the v2 three-MCP architecture (post-Phase 3).
 //
-// Phase 1: boots the all-bin (`dist/cli.js`) and asserts the v1 surface
-// is preserved (133 tools), every name in the ADMIN/EXTRAS manifests is registered,
-// no name appears in two buckets, and core (defined as anything not in admin/extras)
-// totals 79. Reports per-bucket token estimates as a context-budget tripwire.
+// Boots the three split servers and asserts each exposes exactly its bucket:
+//   - core   = 79 Canvas tools + describe_canvas_mcps (80 total)
+//   - admin  = 18 tools per ADMIN manifest below
+//   - extras = 36 tools per EXTRAS manifest below
+// Asserts no tool name collides across servers, and that the canvas-agent
+// bin (dist/cli.js) starts the same surface as servers/core.js.
 //
-// Phase 2 (current): additionally boots dist/servers/{core,admin,extras}.js and
-// asserts each one exposes exactly its bucket. The ADMIN/EXTRAS lists below are the
-// single source of truth — keep in sync with V2_BUILD_PLAN.md routing tables.
+// The ADMIN/EXTRAS lists are the single source of truth — keep in sync with
+// V2_BUILD_PLAN.md routing tables.
 //
 // Run via `npm test`.
 
@@ -21,8 +22,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
 
 // ── Routing manifest (source of truth for ADMIN/EXTRAS) ─────────────────────
-// Anything not in either list is core.
-// Total expected: 18 admin + 36 extras + 79 core = 133.
 
 const ADMIN = [
   // courses.ts (9)
@@ -57,7 +56,12 @@ const EXTRAS = [
   "update_quiz_dates",
 ];
 
-// ── Boot the v1 all-bin and list its tools ──────────────────────────────────
+const CORE_EXPECTED_SIZE = 80;   // 79 Canvas tools + describe_canvas_mcps
+const ADMIN_EXPECTED_SIZE = 18;
+const EXTRAS_EXPECTED_SIZE = 36;
+const TOTAL_EXPECTED = CORE_EXPECTED_SIZE + ADMIN_EXPECTED_SIZE + EXTRAS_EXPECTED_SIZE;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function listToolsFrom(scriptPath) {
   const transport = new StdioClientTransport({
@@ -76,95 +80,93 @@ async function listToolsFrom(scriptPath) {
   return tools;
 }
 
-// ── Assertions ──────────────────────────────────────────────────────────────
-
 const errors = [];
 const assert = (cond, msg) => { if (!cond) errors.push(msg); };
 
-const allBinPath = resolve(REPO_ROOT, "dist/cli.js");
-const tools = await listToolsFrom(allBinPath);
-const names = tools.map(t => t.name);
-const nameSet = new Set(names);
+// ── Manifest internal consistency ────────────────────────────────────────────
+
 const adminSet = new Set(ADMIN);
 const extrasSet = new Set(EXTRAS);
 
-// Manifest internal consistency
-assert(ADMIN.length === 18, `admin manifest: expected 18, got ${ADMIN.length}`);
-assert(EXTRAS.length === 36, `extras manifest: expected 36, got ${EXTRAS.length}`);
-assert(new Set(ADMIN).size === ADMIN.length, "admin manifest contains duplicates");
-assert(new Set(EXTRAS).size === EXTRAS.length, "extras manifest contains duplicates");
+assert(ADMIN.length === ADMIN_EXPECTED_SIZE,
+  `admin manifest: expected ${ADMIN_EXPECTED_SIZE}, got ${ADMIN.length}`);
+assert(EXTRAS.length === EXTRAS_EXPECTED_SIZE,
+  `extras manifest: expected ${EXTRAS_EXPECTED_SIZE}, got ${EXTRAS.length}`);
+assert(adminSet.size === ADMIN.length, "admin manifest contains duplicates");
+assert(extrasSet.size === EXTRAS.length, "extras manifest contains duplicates");
 const overlap = ADMIN.filter(n => extrasSet.has(n));
 assert(overlap.length === 0, `tools in both admin and extras: ${overlap.join(", ")}`);
 
-// Live surface
-assert(tools.length === 133, `all-bin tool count: expected 133, got ${tools.length}`);
-const dupes = names.filter((n, i) => names.indexOf(n) !== i);
-assert(dupes.length === 0, `duplicate tool names in all-bin: ${dupes.join(", ")}`);
+// ── Boot each split server and verify its surface ───────────────────────────
 
-// Manifest matches reality
-const missingAdmin = ADMIN.filter(n => !nameSet.has(n));
-const missingExtras = EXTRAS.filter(n => !nameSet.has(n));
-assert(missingAdmin.length === 0,
-  `admin manifest names not registered: ${missingAdmin.join(", ")}`);
-assert(missingExtras.length === 0,
-  `extras manifest names not registered: ${missingExtras.join(", ")}`);
+const adminTools = await listToolsFrom(resolve(REPO_ROOT, "dist/servers/admin.js"));
+const extrasTools = await listToolsFrom(resolve(REPO_ROOT, "dist/servers/extras.js"));
+const coreTools = await listToolsFrom(resolve(REPO_ROOT, "dist/servers/core.js"));
 
-// Core size by subtraction
-const coreCount = tools.length - ADMIN.length - EXTRAS.length;
-assert(coreCount === 79, `core count by subtraction: expected 79, got ${coreCount}`);
+function checkServer(label, tools, expectedSize, expectedNames) {
+  const names = tools.map(t => t.name);
+  const nameSet = new Set(names);
 
-// ── Phase 2: each split server exposes exactly its bucket ───────────────────
+  assert(tools.length === expectedSize,
+    `${label} server tool count: expected ${expectedSize}, got ${tools.length}`);
 
-const expectedCoreNames = new Set(names.filter(n => !adminSet.has(n) && !extrasSet.has(n)));
-const splitServers = [
-  { label: "core",   path: "dist/servers/core.js",   expectedSize: 79, expectedNames: expectedCoreNames },
-  { label: "admin",  path: "dist/servers/admin.js",  expectedSize: 18, expectedNames: adminSet },
-  { label: "extras", path: "dist/servers/extras.js", expectedSize: 36, expectedNames: extrasSet },
-];
+  const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+  assert(dupes.length === 0, `${label} server has duplicates: ${[...new Set(dupes)].join(", ")}`);
 
-const splitTools = {};
-for (const s of splitServers) {
-  const ts = await listToolsFrom(resolve(REPO_ROOT, s.path));
-  splitTools[s.label] = ts;
-  const got = ts.map(t => t.name);
-  const gotSet = new Set(got);
-
-  assert(ts.length === s.expectedSize,
-    `${s.label} server tool count: expected ${s.expectedSize}, got ${ts.length}`);
-
-  const dupes = got.filter((n, i) => got.indexOf(n) !== i);
-  assert(dupes.length === 0, `${s.label} server has duplicates: ${dupes.join(", ")}`);
-
-  const missing = [...s.expectedNames].filter(n => !gotSet.has(n));
-  const extra = got.filter(n => !s.expectedNames.has(n));
-  assert(missing.length === 0, `${s.label} server missing expected tools: ${missing.join(", ")}`);
-  assert(extra.length === 0, `${s.label} server has unexpected tools: ${extra.join(", ")}`);
+  if (expectedNames) {
+    const missing = [...expectedNames].filter(n => !nameSet.has(n));
+    const extra = names.filter(n => !expectedNames.has(n));
+    assert(missing.length === 0,
+      `${label} server missing expected tools: ${missing.join(", ")}`);
+    assert(extra.length === 0,
+      `${label} server has unexpected tools: ${extra.join(", ")}`);
+  }
 }
 
-// Cross-server collision check: every tool name appears in exactly one split server
+checkServer("admin", adminTools, ADMIN_EXPECTED_SIZE, adminSet);
+checkServer("extras", extrasTools, EXTRAS_EXPECTED_SIZE, extrasSet);
+// Core has no fixed name manifest (it's "everything else"). Just verify size,
+// require that it includes describe_canvas_mcps, and verify it doesn't overlap
+// admin/extras.
+checkServer("core", coreTools, CORE_EXPECTED_SIZE);
+const coreNames = new Set(coreTools.map(t => t.name));
+assert(coreNames.has("describe_canvas_mcps"),
+  "core server is missing describe_canvas_mcps");
+const coreInAdmin = [...coreNames].filter(n => adminSet.has(n));
+const coreInExtras = [...coreNames].filter(n => extrasSet.has(n));
+assert(coreInAdmin.length === 0, `core server has admin-bucket tools: ${coreInAdmin.join(", ")}`);
+assert(coreInExtras.length === 0, `core server has extras-bucket tools: ${coreInExtras.join(", ")}`);
+
+// ── Cross-server collision check ────────────────────────────────────────────
+
 const allSplitNames = [
-  ...splitTools.core.map(t => t.name),
-  ...splitTools.admin.map(t => t.name),
-  ...splitTools.extras.map(t => t.name),
+  ...coreTools.map(t => t.name),
+  ...adminTools.map(t => t.name),
+  ...extrasTools.map(t => t.name),
 ];
 const crossDupes = allSplitNames.filter((n, i) => allSplitNames.indexOf(n) !== i);
 assert(crossDupes.length === 0,
   `tool name appears in more than one split server: ${[...new Set(crossDupes)].join(", ")}`);
+assert(allSplitNames.length === TOTAL_EXPECTED,
+  `total tool count: expected ${TOTAL_EXPECTED}, got ${allSplitNames.length}`);
 
-// Sanity: union of split servers equals the all-bin
-const allSplitSet = new Set(allSplitNames);
-const allBinSet = new Set(names);
-const inAllNotSplit = [...allBinSet].filter(n => !allSplitSet.has(n));
-const inSplitNotAll = [...allSplitSet].filter(n => !allBinSet.has(n));
-assert(inAllNotSplit.length === 0, `in all-bin but missing from split servers: ${inAllNotSplit.join(", ")}`);
-assert(inSplitNotAll.length === 0, `in split servers but missing from all-bin: ${inSplitNotAll.join(", ")}`);
+// ── canvas-agent bin (dist/cli.js) must equal the core server ───────────────
+
+const cliTools = await listToolsFrom(resolve(REPO_ROOT, "dist/cli.js"));
+const cliNames = new Set(cliTools.map(t => t.name));
+assert(cliTools.length === CORE_EXPECTED_SIZE,
+  `canvas-agent bin tool count: expected ${CORE_EXPECTED_SIZE}, got ${cliTools.length}`);
+const cliMinusCore = [...cliNames].filter(n => !coreNames.has(n));
+const coreMinusCli = [...coreNames].filter(n => !cliNames.has(n));
+assert(cliMinusCore.length === 0, `canvas-agent bin has tools not in core: ${cliMinusCore.join(", ")}`);
+assert(coreMinusCli.length === 0, `core server has tools not in canvas-agent bin: ${coreMinusCli.join(", ")}`);
 
 // ── Report ──────────────────────────────────────────────────────────────────
 
-console.log(`\nv1 all-bin tool surface: ${tools.length}`);
-console.log(`  core:   ${coreCount}`);
-console.log(`  admin:  ${ADMIN.length}`);
-console.log(`  extras: ${EXTRAS.length}`);
+console.log(`\nv2 surface (three MCPs): ${TOTAL_EXPECTED} tools`);
+console.log(`  core (canvas-agent):           ${coreTools.length}`);
+console.log(`  admin (canvas-agent-admin):    ${adminTools.length}`);
+console.log(`  extras (canvas-agent-extras):  ${extrasTools.length}`);
 
 const CHARS_PER_TOKEN = 3.5;
 const renderTool = (t) => JSON.stringify({
@@ -172,20 +174,18 @@ const renderTool = (t) => JSON.stringify({
   description: t.description ?? "",
   input_schema: t.inputSchema ?? {},
 });
-const bucketTokens = (filterFn) =>
-  Math.round(
-    tools.filter(filterFn).reduce((s, t) => s + renderTool(t).length, 0) /
-      CHARS_PER_TOKEN
-  );
-const totalTok = bucketTokens(() => true);
-const coreTok = bucketTokens(t => !adminSet.has(t.name) && !extrasSet.has(t.name));
-const adminTok = bucketTokens(t => adminSet.has(t.name));
-const extrasTok = bucketTokens(t => extrasSet.has(t.name));
+const tokens = (ts) => Math.round(
+  ts.reduce((s, t) => s + renderTool(t).length, 0) / CHARS_PER_TOKEN
+);
+const coreTok = tokens(coreTools);
+const adminTok = tokens(adminTools);
+const extrasTok = tokens(extrasTools);
+const totalTok = coreTok + adminTok + extrasTok;
 console.log(`\nestimated tokens (chars / ${CHARS_PER_TOKEN}):`);
-console.log(`  total:  ~${totalTok.toLocaleString()}`);
-console.log(`  core:   ~${coreTok.toLocaleString()}  (${Math.round((coreTok/totalTok)*100)}% of v1)`);
+console.log(`  core:   ~${coreTok.toLocaleString()}  (${Math.round((coreTok/totalTok)*100)}% of total)`);
 console.log(`  admin:  ~${adminTok.toLocaleString()}`);
 console.log(`  extras: ~${extrasTok.toLocaleString()}`);
+console.log(`  total:  ~${totalTok.toLocaleString()}`);
 
 if (errors.length) {
   console.error(`\n❌ ${errors.length} assertion failure(s):`);
