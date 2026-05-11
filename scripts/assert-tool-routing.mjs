@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Assertion harness for the v2 three-MCP refactor.
 //
-// Phase 1 (current): boots the all-bin (`dist/cli.js`) and asserts the v1 surface
+// Phase 1: boots the all-bin (`dist/cli.js`) and asserts the v1 surface
 // is preserved (133 tools), every name in the ADMIN/EXTRAS manifests is registered,
 // no name appears in two buckets, and core (defined as anything not in admin/extras)
 // totals 79. Reports per-bucket token estimates as a context-budget tripwire.
 //
-// Phase 2 (later): will additionally boot dist/servers/{core,admin,extras}.js and
-// assert each one exposes exactly its bucket. The ADMIN/EXTRAS lists below are the
+// Phase 2 (current): additionally boots dist/servers/{core,admin,extras}.js and
+// asserts each one exposes exactly its bucket. The ADMIN/EXTRAS lists below are the
 // single source of truth — keep in sync with V2_BUILD_PLAN.md routing tables.
 //
 // Run via `npm test`.
@@ -112,6 +112,52 @@ assert(missingExtras.length === 0,
 // Core size by subtraction
 const coreCount = tools.length - ADMIN.length - EXTRAS.length;
 assert(coreCount === 79, `core count by subtraction: expected 79, got ${coreCount}`);
+
+// ── Phase 2: each split server exposes exactly its bucket ───────────────────
+
+const expectedCoreNames = new Set(names.filter(n => !adminSet.has(n) && !extrasSet.has(n)));
+const splitServers = [
+  { label: "core",   path: "dist/servers/core.js",   expectedSize: 79, expectedNames: expectedCoreNames },
+  { label: "admin",  path: "dist/servers/admin.js",  expectedSize: 18, expectedNames: adminSet },
+  { label: "extras", path: "dist/servers/extras.js", expectedSize: 36, expectedNames: extrasSet },
+];
+
+const splitTools = {};
+for (const s of splitServers) {
+  const ts = await listToolsFrom(resolve(REPO_ROOT, s.path));
+  splitTools[s.label] = ts;
+  const got = ts.map(t => t.name);
+  const gotSet = new Set(got);
+
+  assert(ts.length === s.expectedSize,
+    `${s.label} server tool count: expected ${s.expectedSize}, got ${ts.length}`);
+
+  const dupes = got.filter((n, i) => got.indexOf(n) !== i);
+  assert(dupes.length === 0, `${s.label} server has duplicates: ${dupes.join(", ")}`);
+
+  const missing = [...s.expectedNames].filter(n => !gotSet.has(n));
+  const extra = got.filter(n => !s.expectedNames.has(n));
+  assert(missing.length === 0, `${s.label} server missing expected tools: ${missing.join(", ")}`);
+  assert(extra.length === 0, `${s.label} server has unexpected tools: ${extra.join(", ")}`);
+}
+
+// Cross-server collision check: every tool name appears in exactly one split server
+const allSplitNames = [
+  ...splitTools.core.map(t => t.name),
+  ...splitTools.admin.map(t => t.name),
+  ...splitTools.extras.map(t => t.name),
+];
+const crossDupes = allSplitNames.filter((n, i) => allSplitNames.indexOf(n) !== i);
+assert(crossDupes.length === 0,
+  `tool name appears in more than one split server: ${[...new Set(crossDupes)].join(", ")}`);
+
+// Sanity: union of split servers equals the all-bin
+const allSplitSet = new Set(allSplitNames);
+const allBinSet = new Set(names);
+const inAllNotSplit = [...allBinSet].filter(n => !allSplitSet.has(n));
+const inSplitNotAll = [...allSplitSet].filter(n => !allBinSet.has(n));
+assert(inAllNotSplit.length === 0, `in all-bin but missing from split servers: ${inAllNotSplit.join(", ")}`);
+assert(inSplitNotAll.length === 0, `in split servers but missing from all-bin: ${inSplitNotAll.join(", ")}`);
 
 // ── Report ──────────────────────────────────────────────────────────────────
 
