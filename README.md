@@ -40,15 +40,15 @@ The three bins share a single import graph and a single per-course vault, so ano
 |---|---|---|---|
 | Courses | `courses.ts` | core + admin | core: list courses, terms, assignment groups, modules, grading periods. admin: create/update/delete/conclude/reset/copy course, navigation tabs. |
 | Assignments | `assignments.ts` | core | CRUD assignments, batch update dates |
-| Submissions | `submissions.ts` | core | List/download submissions, missing submissions, accommodations |
+| Submissions | `submissions.ts` | core | List/download submissions, download discussion entries |
 | Grading | `grading.ts` | core + extras | core: grade/bulk-grade/post/hide, missing & gradeable students. extras: late policy, grading standards. |
 | Rubrics | `rubrics.ts` | core | CRUD rubrics, copy across assignments/courses, associate with display toggles, link to outcomes, view/edit/delete assessments |
 | Outcomes | `outcomes.ts` | extras | List outcomes/groups, outcome results, mastery rollups |
 | Modules | `modules.ts` | core | CRUD modules and module items, publish modules |
 | Pages | `pages.ts` | extras | CRUD pages, front page, page revisions |
-| Discussions | `discussions.ts` | core | CRUD discussions, download entries |
+| Discussions | `discussions.ts` | core | CRUD discussions and batch updates (download entries lives in submissions.ts) |
 | Quizzes (Classic) | `quizzes.ts` | extras | List/get/update Classic Quizzes |
-| New Quizzes | `new-quizzes.ts` | core | CRUD New Quizzes, quiz items, accommodations, list_new_quizzes |
+| New Quizzes | `new-quizzes.ts` | core | List/CRUD New Quizzes, quiz items, accommodations, generate quiz reports |
 | Calendar | `calendar.ts` | core | CRUD calendar events |
 | Files | `files.ts` | extras | List/get/update/delete files, folders, quota |
 | Enrollments | `enrollments.ts` | core + admin | core: list students/sections/users, get profile. admin: crosslist, create/update/delete sections, enroll/drop users, move student. |
