@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Canvas Agent — AI Assistant for Canvas LMS</title>
-  <meta name="description" content="Connect Claude or Gemini to your Canvas LMS. Manage courses, assignments, grades, and more with natural language.">
+  <meta name="description" content="Connect Claude or Antigravity to your Canvas LMS. Manage courses, assignments, grades, and more with natural language.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
   <header class="hero">
     <div class="container">
       <h1>Canvas Agent</h1>
-      <p class="tagline">Connect Claude or Gemini to your Canvas LMS &mdash; manage courses, assignments, and grades just by asking.</p>
+      <p class="tagline">Connect Claude or Antigravity to your Canvas LMS &mdash; manage courses, assignments, and grades just by asking.</p>
     </div>
   </header>
 
@@ -26,11 +26,11 @@
 
       <p class="section-intro">Canvas Agent works with three different AI assistants &mdash; pick whichever you prefer:</p>
       <ul class="resource-list">
-        <li><strong>Gemini CLI</strong> &mdash; Google's terminal assistant. The default choice for most teachers because it has a free tier and works with any Google account.</li>
+        <li><strong>Antigravity CLI</strong> &mdash; Google's terminal assistant. The default choice for most teachers because it has a free tier and works with any Google account.</li>
         <li><strong>Claude Code</strong> &mdash; Anthropic's terminal assistant. Requires a paid Claude plan.</li>
         <li><strong>Claude Desktop</strong> &mdash; Anthropic's point-and-click app. Set up automatically alongside Claude Code if you have both.</li>
       </ul>
-      <p class="section-intro">The steps below walk through Gemini CLI. If you'd rather use Claude Code, Step 2 and Step 3 have a fold-out with the Claude version of each command &mdash; everything else is identical.</p>
+      <p class="section-intro">The steps below walk through Antigravity CLI. If you'd rather use Claude Code, Step 2 and Step 3 have a fold-out with the Claude version of each command &mdash; everything else is identical.</p>
 
       <ol class="steps">
         <li class="step">
@@ -44,6 +44,13 @@
                 <p>Open a terminal and type <code>node --version</code>. If you see a version number (like <code>v20.11.0</code>), you already have it and can skip this step.</p>
               </div>
             </details>
+            <details>
+              <summary>On a school-managed Mac?</summary>
+              <div class="details-content">
+                <p>If your school manages your laptop through <strong>Mosyle Manager</strong>, you'll need temporary admin rights to run the Node.js installer. Click the Mosyle Manager icon in your menu bar (top-right of the screen), choose <strong>Admin On-Demand</strong>, and follow the prompt to elevate. You'll have admin access for a short window &mdash; long enough to run the installer. When it finishes, your normal user permissions come back automatically.</p>
+                <p>If you don't see Mosyle Manager in your menu bar, you probably don't need this step &mdash; just run the installer normally.</p>
+              </div>
+            </details>
           </div>
         </li>
 
@@ -51,9 +58,9 @@
           <div class="step-number">2</div>
           <div class="step-content">
             <h3>Install your AI assistant</h3>
-            <p>Open your terminal and paste this command to install Gemini CLI:</p>
+            <p>Open your terminal and paste this command to install Antigravity CLI:</p>
             <div class="code-block">
-              <code>npm install -g @google/gemini-cli</code>
+              <code>curl -fsSL https://antigravity.google/cli/install.sh | bash</code>
               <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
             </div>
             <details>
@@ -63,7 +70,7 @@
                 <p><strong>Windows:</strong> Press the Windows key, type <strong>PowerShell</strong>, and press Enter.</p>
               </div>
             </details>
-            <p>You'll see some progress text scroll by. When it finishes and you get your cursor back, Gemini CLI is installed.</p>
+            <p>You'll see some progress text scroll by. When it finishes, <strong>close and reopen your terminal</strong> so the new command is available.</p>
             <details>
               <summary>Prefer Claude Code instead?</summary>
               <div class="details-content">
@@ -83,13 +90,13 @@
           <div class="step-number">3</div>
           <div class="step-content">
             <h3>Sign in</h3>
-            <p>You'll need a Google account. Gemini CLI has a free tier, so you don't need a paid plan to get started.</p>
+            <p>You'll need a Google account. Antigravity CLI has a free tier, so you don't need a paid plan to get started.</p>
             <p>In the same terminal, type:</p>
             <div class="code-block">
-              <code>gemini</code>
+              <code>agy</code>
               <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
             </div>
-            <p>Follow the prompts to sign in with your Google account. When you see a welcome message and a prompt where you can type messages, type <code>/exit</code> to close Gemini CLI for now &mdash; we'll come back to it in a moment.</p>
+            <p>A browser window will open to sign in with your Google account. When you see a welcome message and a prompt where you can type messages, type <code>/exit</code> to close Antigravity CLI for now &mdash; we'll come back to it in a moment.</p>
             <details>
               <summary>Using Claude Code instead?</summary>
               <div class="details-content">
@@ -120,7 +127,7 @@
               <li><strong>Where to make Canvas Agent available</strong> &mdash; you can choose "everywhere" (recommended) so Canvas tools are always available, or limit it to a specific folder on your computer.</li>
             </ol>
             <p>At the end, the wizard will confirm that everything is connected.</p>
-            <p class="step-note">The same wizard works for Claude Code, Claude Desktop, and Gemini CLI. It auto-detects whichever ones you have installed and sets up Canvas Agent in all of them &mdash; no extra steps needed. If you also have <a href="https://claude.ai/download" target="_blank" rel="noopener">Claude Desktop</a> installed, it gets configured too.</p>
+            <p class="step-note">The same wizard works for Claude Code, Claude Desktop, and Antigravity CLI. It auto-detects whichever ones you have installed and sets up Canvas Agent in all of them &mdash; no extra steps needed. If you also have <a href="https://claude.ai/download" target="_blank" rel="noopener">Claude Desktop</a> installed, it gets configured too.</p>
           </div>
         </li>
 
@@ -128,7 +135,7 @@
           <div class="step-number">5</div>
           <div class="step-content">
             <h3>Start using it</h3>
-            <p>Open your AI assistant by typing <code>gemini</code> (or <code>claude</code>) in your terminal, then try asking something like:</p>
+            <p>Open your AI assistant by typing <code>agy</code> (or <code>claude</code>) in your terminal, then try asking something like:</p>
             <ul class="example-prompts">
               <li>List my Canvas courses</li>
               <li>Show me upcoming assignments for my English class</li>
@@ -138,11 +145,11 @@
             <details>
               <summary>Using your assistant on a specific project or folder</summary>
               <div class="details-content">
-                <p>Claude and Gemini both work best when you open them inside the folder you want to work in &mdash; especially for coding projects. To do this, create a folder wherever you'd like (your Desktop or Documents folder are fine), then:</p>
+                <p>Claude and Antigravity both work best when you open them inside the folder you want to work in &mdash; especially for coding projects. To do this, create a folder wherever you'd like (your Desktop or Documents folder are fine), then:</p>
                 <ol class="sub-steps">
                   <li>Open a terminal window.</li>
                   <li>Type <code>cd</code> followed by a space, then <strong>drag the folder from Finder (or File Explorer) onto the terminal window</strong> &mdash; this fills in the path for you. Press Enter.</li>
-                  <li>Type <code>gemini</code> (or <code>claude</code>) and press Enter.</li>
+                  <li>Type <code>agy</code> (or <code>claude</code>) and press Enter.</li>
                 </ol>
                 <p>Your assistant will now be able to see and work with the files in that folder.</p>
               </div>
@@ -212,9 +219,9 @@
       <details>
         <summary>Is my Canvas data safe?</summary>
         <div class="details-content">
-          <p>Canvas Agent runs on your own computer, not on a remote server. Your Canvas access token is stored locally in your Claude or Gemini configuration and is never sent to anyone except Canvas itself.</p>
-          <p><strong>Student names and emails are hidden from the AI by default.</strong> Before any Canvas response reaches Claude or Gemini, Canvas Agent swaps student names, emails, and login IDs for anonymous tokens like <code>Student_a4f2c1</code>. The real names never enter the AI's view. When the AI writes comments or announcements back to Canvas, Canvas Agent swaps the tokens back to real names before sending, so students still see correctly-addressed feedback. See the next question for more detail.</p>
-          <p>Canvas data that Canvas Agent fetches for you &mdash; like student grades, submissions, and course content &mdash; is <strong>automatically excluded from Claude's training data</strong> under <a href="https://privacy.claude.com/en/articles/10023580-is-my-data-used-for-model-training" target="_blank" rel="noopener">Anthropic's policy for MCP server content</a>, regardless of your account settings. Gemini CLI has similar protections for MCP content.</p>
+          <p>Canvas Agent runs on your own computer, not on a remote server. Your Canvas access token is stored locally in your Claude or Antigravity configuration and is never sent to anyone except Canvas itself.</p>
+          <p><strong>Student names and emails are hidden from the AI by default.</strong> Before any Canvas response reaches Claude or Antigravity, Canvas Agent swaps student names, emails, and login IDs for anonymous tokens like <code>Student_a4f2c1</code>. The real names never enter the AI's view. When the AI writes comments or announcements back to Canvas, Canvas Agent swaps the tokens back to real names before sending, so students still see correctly-addressed feedback. See the next question for more detail.</p>
+          <p>Canvas data that Canvas Agent fetches for you &mdash; like student grades, submissions, and course content &mdash; is <strong>automatically excluded from Claude's training data</strong> under <a href="https://privacy.claude.com/en/articles/10023580-is-my-data-used-for-model-training" target="_blank" rel="noopener">Anthropic's policy for MCP server content</a>, regardless of your account settings. Antigravity CLI has similar protections for MCP content.</p>
           <p>That exclusion only covers content the tool returns. Student information <em>you</em> type or paste directly into the chat (like pasting a student's essay) is treated as a normal message, not MCP content, so it's governed by your account's training setting instead. On Claude personal plans (Pro and Max), opt out by visiting your <a href="https://claude.ai/settings/data-privacy-controls" target="_blank" rel="noopener">Claude privacy settings</a> and turning off "Help Improve Claude." Claude Team, Enterprise, and Education plans have training disabled by default.</p>
         </div>
       </details>
@@ -225,7 +232,7 @@
           <p>Every student in every course gets a stable code like <code>Student_a4f2c1</code>. When you ask the AI something like "list the students in my Chekhov class", the AI sees the codes &mdash; not real names or emails. The map from codes to real students lives only on your computer, at <code>~/.canvas-agent/vault/&lt;your-canvas-host&gt;/&lt;course_id&gt;.json</code> (that file is readable only by you).</p>
           <p><strong>Free text is also scanned.</strong> If a student writes their own name (or a classmate's name) inside a discussion post, submission essay, or comment, Canvas Agent finds it and swaps it for the same code before the AI sees it. The match is exact &mdash; full name (<code>Jane Doe</code>) or sortable form (<code>Doe, Jane</code>). Nicknames and first-name-only references go through unchanged, since common first names overlap with too many ordinary English words.</p>
           <p><strong>Teachers stay readable.</strong> Other teachers and TAs in your courses are <em>not</em> anonymized &mdash; their real names pass through to the AI. This keeps things like "did I grade this submission?" working naturally. Canvas Agent figures out who's a teacher from their enrollment role.</p>
-          <p><strong>The AI never sees student real names.</strong> If you want to see who a code refers to, run this in a <em>separate</em> terminal window (not the one running Claude or Gemini):</p>
+          <p><strong>The AI never sees student real names.</strong> If you want to see who a code refers to, run this in a <em>separate</em> terminal window (not the one running Claude or Antigravity):</p>
           <div class="code-block">
             <code>npx -y canvas-agent reveal --all --course 1234</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
@@ -237,7 +244,7 @@
           </div>
           <p><strong>What about writing comments back to students?</strong> When you tell the AI something like "leave a comment on Student_a4f2c1's essay saying great work", Canvas Agent automatically swaps <code>Student_a4f2c1</code> back to the real name before sending the comment to Canvas &mdash; so students see a normal, correctly-addressed message.</p>
           <p><strong>What the AI still can't do:</strong> search for a student by name. The AI doesn't know real names, so it can't ask Canvas to "find the student named Jane." The workflow is: list the class first, decode the codes yourself, then tell the AI which student ID to work with.</p>
-          <p>If you ever want to turn anonymization off (for example, if you're doing solo prep work and don't need the privacy layer), set the environment variable <code>CANVAS_AGENT_ANONYMIZE=0</code> before launching Claude or Gemini. It's on by default for everyone.</p>
+          <p>If you ever want to turn anonymization off (for example, if you're doing solo prep work and don't need the privacy layer), set the environment variable <code>CANVAS_AGENT_ANONYMIZE=0</code> before launching Claude or Antigravity. It's on by default for everyone.</p>
         </div>
       </details>
 
@@ -255,7 +262,7 @@
         <div class="details-content">
           <p>Canvas Agent itself is <strong>free and open source</strong>. You do need an AI assistant to use it with:</p>
           <ul>
-            <li><strong>Gemini CLI</strong> &mdash; has a <strong>free tier</strong> that works with Canvas Agent. See <a href="https://ai.google.dev/gemini-api/docs" target="_blank" rel="noopener">Google's Gemini docs</a> for details and paid options.</li>
+            <li><strong>Antigravity CLI</strong> &mdash; has a <strong>free tier</strong> that works with Canvas Agent. See <a href="https://antigravity.google/docs/cli-overview" target="_blank" rel="noopener">Google's Antigravity docs</a> for details and paid options.</li>
             <li><strong>Claude Code / Claude Desktop</strong> &mdash; requires a paid Claude plan (Pro, Team, or Enterprise). See <a href="https://claude.ai/pricing" target="_blank" rel="noopener">claude.ai/pricing</a>.</li>
           </ul>
         </div>
@@ -280,7 +287,7 @@
       <details>
         <summary>Can the AI accidentally change or delete my course content?</summary>
         <div class="details-content">
-          <p>Your AI assistant always asks for your confirmation before making changes. Claude Code, Claude Desktop, and Gemini CLI all show you exactly what the tool is about to do and wait for you to approve it. For destructive actions like deleting an assignment or page, Canvas Agent also requires you to confirm the name or title first. You stay in control.</p>
+          <p>Your AI assistant always asks for your confirmation before making changes. Claude Code, Claude Desktop, and Antigravity CLI all show you exactly what the tool is about to do and wait for you to approve it. For destructive actions like deleting an assignment or page, Canvas Agent also requires you to confirm the name or title first. You stay in control.</p>
         </div>
       </details>
 

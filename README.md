@@ -1,6 +1,6 @@
 # Canvas Agent
 
-MCP server that connects AI assistants — Google's Gemini CLI, Claude Code, and Claude Desktop — to [Instructure Canvas LMS](https://www.instructure.com/canvas). Teachers and administrators can manage courses, assignments, grades, and more through natural language.
+MCP server that connects AI assistants — Google's Antigravity CLI, Claude Code, and Claude Desktop — to [Instructure Canvas LMS](https://www.instructure.com/canvas). Teachers and administrators can manage courses, assignments, grades, and more through natural language.
 
 > **Looking to install Canvas Agent?** Follow the setup guide at **[hughsibbele.github.io/Canvas-Agent](https://hughsibbele.github.io/Canvas-Agent)** — no technical background required.
 
@@ -11,7 +11,7 @@ MCP server that connects AI assistants — Google's Gemini CLI, Claude Code, and
 Canvas Agent ships as **three [MCP](https://modelcontextprotocol.io/) servers from one npm package**, split by intent. The setup wizard registers all three by default; users who want to save context can drop admin or extras from their MCP config.
 
 ```
-AI client (Claude Code / Claude Desktop / Gemini CLI)
+AI client (Claude Code / Claude Desktop / Antigravity CLI)
   ├─ spawns canvas-agent          (core, 80 tools — daily teaching/grading)
   ├─ spawns canvas-agent-admin    (18 tools — course/section/enrollment lifecycle)
   └─ spawns canvas-agent-extras   (36 tools — outcomes, groups, pages, files, messaging, …)
@@ -30,7 +30,7 @@ The three bins share a single import graph and a single per-course vault, so ano
 | Canvas API client | `src/canvas-client.ts` | Thin fetch wrapper with automatic pagination (`canvasAll` for flat array endpoints, `canvasAllWrapped` for `{key: [...], linked: {…}}` shapes) and rate-limit backoff. Pipes every response through anonymizer → name-detector → sandbox before returning. |
 | Tool modules | `src/tools/*.ts` | One file per Canvas domain. Mixed-bucket files export per-bucket registrars (e.g. `registerCoursesCore` + `registerCoursesAdmin`); single-bucket files export one (e.g. `registerAssignmentsCore`). |
 | Privacy pipeline | `src/anonymizer.ts`, `src/name-detector.ts`, `src/sandbox.ts`, `src/vault.ts` | Three-stage redaction at the MCP boundary: token-swap structured PII fields, redact student names inside free text, wrap untrusted content with prompt-injection delimiters. Per-course vault tracks role (student/teacher/unknown); teachers are exempt. Map lives in `~/.canvas-agent/vault/`. |
-| Setup wizard | `src/setup.ts` | Interactive CLI that validates credentials, detects Claude Code / Desktop / Gemini CLI, and registers all three v2 bins. |
+| Setup wizard | `src/setup.ts` | Interactive CLI that validates credentials, detects Claude Code / Desktop / Antigravity CLI, and registers all three v2 bins. |
 | Tool-routing assertion harness | `scripts/assert-tool-routing.mjs` | Boots all three split servers via the MCP SDK and asserts each exposes exactly its bucket (80 / 18 / 36) with no cross-server name collisions. Run via `npm test`. |
 | Landing site | `docs/` | Static GitHub Pages site with the end-user setup guide |
 

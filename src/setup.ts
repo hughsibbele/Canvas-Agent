@@ -1,6 +1,6 @@
 /**
  * Interactive setup wizard for Canvas Agent.
- * Guides non-technical users through connecting Canvas to Gemini CLI,
+ * Guides non-technical users through connecting Canvas to Antigravity CLI,
  * Claude Code, or Claude Desktop — whichever they have installed.
  * Uses only Node.js built-ins — no external dependencies.
  */
@@ -34,7 +34,7 @@ function banner() {
   console.log(cyan("  ║") + bold("     Canvas Agent — Setup Wizard      ") + cyan("║"));
   console.log(cyan("  ╚══════════════════════════════════════╝"));
   console.log();
-  console.log("  This will connect Gemini or Claude to your Canvas");
+  console.log("  This will connect Antigravity or Claude to your Canvas");
   console.log("  courses. You'll need about 3 minutes and access to");
   console.log("  your Canvas account.\n");
 }
@@ -48,9 +48,9 @@ function isClaudeCodeInstalled(): boolean {
   }
 }
 
-function isGeminiCliInstalled(): boolean {
+function isAntigravityCliInstalled(): boolean {
   try {
-    execSync("gemini --version", { stdio: "pipe" });
+    execSync("agy --version", { stdio: "pipe" });
     return true;
   } catch {
     return false;
@@ -342,8 +342,8 @@ async function chooseScope(
   rl: ReadlineInterface,
   hasOtherGlobalTargets: boolean
 ): Promise<ScopeChoice> {
-  // When Desktop or Gemini CLI is also a target, the heading and intro need
-  // to make clear that this scope question only affects Claude Code — in
+  // When Desktop or Antigravity CLI is also a target, the heading and intro
+  // need to make clear that this scope question only affects Claude Code — in
   // those other targets, Canvas Agent is always globally available.
   if (hasOtherGlobalTargets) {
     console.log(bold("  Step 3: Where to Use Canvas Agent in Claude Code\n"));
@@ -352,7 +352,7 @@ async function chooseScope(
         dim("(This choice only affects Claude Code. In Claude Desktop and")
     );
     console.log(
-      "  " + dim("Gemini CLI, Canvas Agent is always available globally.)") + "\n"
+      "  " + dim("Antigravity CLI, Canvas Agent is always available globally.)") + "\n"
     );
     console.log("  Canvas Agent can be available every time you use Claude Code,");
     console.log("  or only when you're working in a specific folder.\n");
@@ -587,17 +587,17 @@ function registerWithDesktop(apiUrl: string, token: string): RegisterResult {
   }
 }
 
-// Gemini CLI stores its config at ~/.gemini/settings.json with the same
-// `mcpServers` shape that Claude Code/Desktop use. We write the file
-// directly (rather than shelling out to `gemini mcp add`) so behavior is
-// stable across Gemini CLI versions and we don't have to navigate flag
-// quirks like passing `-y` to npx through yargs.
-function getGeminiConfigPath(): string {
-  return join(homedir(), ".gemini", "settings.json");
+// Antigravity CLI stores its MCP config at ~/.gemini/config/mcp_config.json
+// with the same `mcpServers` shape that Claude Code/Desktop use. We write
+// the file directly (rather than shelling out to `agy mcp add`) so behavior
+// is stable across Antigravity CLI versions and we don't have to navigate
+// flag quirks like passing `-y` to npx through yargs.
+function getAntigravityConfigPath(): string {
+  return join(homedir(), ".gemini", "config", "mcp_config.json");
 }
 
-function registerWithGeminiCli(apiUrl: string, token: string): RegisterResult {
-  const configPath = getGeminiConfigPath();
+function registerWithAntigravityCli(apiUrl: string, token: string): RegisterResult {
+  const configPath = getAntigravityConfigPath();
   try {
     let config: any = {};
     if (existsSync(configPath)) {
@@ -607,7 +607,7 @@ function registerWithGeminiCli(apiUrl: string, token: string): RegisterResult {
       } catch (e: any) {
         return {
           ok: false,
-          error: `Could not parse existing Gemini config: ${e.message}. Fix or delete ${configPath} and try again.`,
+          error: `Could not parse existing Antigravity config: ${e.message}. Fix or delete ${configPath} and try again.`,
         };
       }
     } else {
@@ -627,7 +627,7 @@ function registerWithGeminiCli(apiUrl: string, token: string): RegisterResult {
     }
     return { ok: true };
   } catch (e: any) {
-    return { ok: false, error: e.message || "unknown error writing Gemini config" };
+    return { ok: false, error: e.message || "unknown error writing Antigravity config" };
   }
 }
 
@@ -635,7 +635,7 @@ function printManualConfig(apiUrl: string) {
   console.log(yellow("\n  Add this to your MCP configuration"));
   console.log(
     yellow("  ") +
-      dim("(~/.gemini/settings.json, Claude Desktop config, or equivalent):") +
+      dim("(~/.gemini/config/mcp_config.json, Claude Desktop config, or equivalent):") +
       "\n"
   );
   const config: Record<string, ReturnType<typeof mcpServerEntry>> = {};
@@ -668,13 +668,13 @@ export async function runSetup(): Promise<void> {
 
     const hasClaudeCode = isClaudeCodeInstalled();
     const hasClaudeDesktop = isClaudeDesktopInstalled();
-    const hasGeminiCli = isGeminiCliInstalled();
+    const hasAntigravityCli = isAntigravityCliInstalled();
 
     console.log("  Checking your setup...\n");
     console.log(
-      (hasGeminiCli ? green("  ✓") : dim("  ✗")) +
-        " Gemini CLI " +
-        (hasGeminiCli ? "" : dim("(not found)"))
+      (hasAntigravityCli ? green("  ✓") : dim("  ✗")) +
+        " Antigravity CLI " +
+        (hasAntigravityCli ? "" : dim("(not found)"))
     );
     console.log(
       (hasClaudeCode ? green("  ✓") : dim("  ✗")) +
@@ -688,15 +688,15 @@ export async function runSetup(): Promise<void> {
     );
     console.log();
 
-    if (!hasGeminiCli && !hasClaudeCode && !hasClaudeDesktop) {
+    if (!hasAntigravityCli && !hasClaudeCode && !hasClaudeDesktop) {
       console.log(
-        yellow("  ⚠") + " Canvas Agent needs one of: Gemini CLI, Claude Code, or Claude Desktop."
+        yellow("  ⚠") + " Canvas Agent needs one of: Antigravity CLI, Claude Code, or Claude Desktop."
       );
       console.log();
       console.log("  " + bold("Install one (or more) and then re-run this wizard:"));
       console.log();
-      console.log("  " + bold("Gemini CLI") + dim(" — Google's terminal assistant (recommended)"));
-      console.log("    " + bold("npm install -g @google/gemini-cli"));
+      console.log("  " + bold("Antigravity CLI") + dim(" — Google's terminal assistant (recommended)"));
+      console.log("    " + bold("curl -fsSL https://antigravity.google/cli/install.sh | bash"));
       console.log();
       console.log("  " + bold("Claude Code") + dim(" — Anthropic's terminal assistant"));
       console.log("    " + bold("npm install -g @anthropic-ai/claude-code"));
@@ -827,7 +827,7 @@ export async function runSetup(): Promise<void> {
     let scopeChoice: ScopeChoice = { scope: "user" };
     if (hasClaudeCode) {
       try {
-        scopeChoice = await chooseScope(rl, hasClaudeDesktop || hasGeminiCli);
+        scopeChoice = await chooseScope(rl, hasClaudeDesktop || hasAntigravityCli);
       } catch (e: any) {
         console.log(red("  ✗") + ` ${e.message}\n`);
         console.log("  Re-run this wizard when you're ready:");
@@ -847,18 +847,18 @@ export async function runSetup(): Promise<void> {
     // abort the other — users should get whatever we can successfully
     // install for them, and we report per-target results so they can see
     // exactly what happened.
-    let geminiResult: RegisterResult | null = null;
+    let antigravityResult: RegisterResult | null = null;
     let codeResult: RegisterResult | null = null;
     let desktopResult: RegisterResult | null = null;
 
-    if (hasGeminiCli) {
-      console.log("  Configuring Gemini CLI...");
-      geminiResult = registerWithGeminiCli(apiUrl, token);
-      if (geminiResult.ok) {
-        console.log(green("  ✓") + " Gemini CLI\n");
+    if (hasAntigravityCli) {
+      console.log("  Configuring Antigravity CLI...");
+      antigravityResult = registerWithAntigravityCli(apiUrl, token);
+      if (antigravityResult.ok) {
+        console.log(green("  ✓") + " Antigravity CLI\n");
       } else {
-        console.log(yellow("  ⚠") + " Gemini CLI — could not configure.");
-        const detail = geminiResult.error
+        console.log(yellow("  ⚠") + " Antigravity CLI — could not configure.");
+        const detail = antigravityResult.error
           .split("\n")
           .map((l) => `    ${l}`)
           .join("\n");
@@ -898,10 +898,10 @@ export async function runSetup(): Promise<void> {
 
     const codeOk = codeResult?.ok ?? false;
     const desktopOk = desktopResult?.ok ?? false;
-    const geminiOk = geminiResult?.ok ?? false;
+    const antigravityOk = antigravityResult?.ok ?? false;
 
     // If NOTHING succeeded, fall back to printing the config for manual install.
-    if (!codeOk && !desktopOk && !geminiOk) {
+    if (!codeOk && !desktopOk && !antigravityOk) {
       console.log(red("  ✗") + " Canvas Agent could not be installed automatically.\n");
       printManualConfig(apiUrl);
       console.log("  Copy the JSON above and add it to your MCP client's configuration.");
@@ -918,7 +918,7 @@ export async function runSetup(): Promise<void> {
 
     // Summary of where Canvas Agent ended up
     const installedIn: string[] = [];
-    if (geminiOk) installedIn.push("Gemini CLI");
+    if (antigravityOk) installedIn.push("Antigravity CLI");
     if (codeOk) installedIn.push("Claude Code");
     if (desktopOk) installedIn.push("Claude Desktop");
 
@@ -935,9 +935,9 @@ export async function runSetup(): Promise<void> {
     // Per-target launch instructions. We show every surface that succeeded
     // so the user knows how to reach Canvas Agent from whichever tool they
     // prefer to open first.
-    if (geminiOk) {
-      console.log("  " + bold("To use it in Gemini CLI:"));
-      console.log("    1. Open Terminal and type: " + bold("gemini"));
+    if (antigravityOk) {
+      console.log("  " + bold("To use it in Antigravity CLI:"));
+      console.log("    1. Open Terminal and type: " + bold("agy"));
       console.log('    2. Try asking: ' + dim('"List my Canvas courses"'));
       console.log();
     }

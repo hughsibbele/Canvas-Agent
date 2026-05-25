@@ -188,4 +188,4 @@ The README **must** carry an explicit alphabetical "tool → bin" lookup table (
 - Renaming or refactoring the shared infrastructure (canvas-client, vault, anonymizer). The v2 split is purely a registration-time partition.
 - Changing tool signatures, descriptions, or behavior. Same surface, different containers.
 - New tools.
-- The setup wizard's auto-detection of AI clients (Gemini CLI, Claude Desktop, Claude Code). Wizard logic stays the same; it just registers the v2 `canvas-agent` bin as before, and users add the admin/extras bins by hand if they want them.
+- The setup wizard's auto-detection of AI clients (Antigravity CLI, Claude Desktop, Claude Code). Wizard logic stays the same; it just registers the v2 `canvas-agent` bin as before, and users add the admin/extras bins by hand if they want them.
