@@ -1,6 +1,6 @@
 {
   "name": "canvas-agent",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "MCP server for Instructure Canvas LMS — connect Claude AI to your courses",
   "type": "module",
   "bin": {
