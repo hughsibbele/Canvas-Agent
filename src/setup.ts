@@ -240,9 +240,18 @@ type RegisterResult = { ok: true } | { ok: false; error: string };
 const BINS = ["canvas-agent", "canvas-agent-admin", "canvas-agent-extras"] as const;
 
 function mcpServerEntry(bin: string, apiUrl: string, token: string) {
+  // `canvas-agent-admin` and `canvas-agent-extras` are bins *inside* the
+  // `canvas-agent` package, not packages of their own. `npx -y canvas-agent-admin`
+  // makes npx try to download a package by that name and 404s ("Server
+  // disconnected" / failed). For any bin whose name isn't the package name,
+  // tell npx which package to resolve the bin from via `-p canvas-agent`.
+  const args =
+    bin === "canvas-agent"
+      ? ["-y", bin]
+      : ["-y", "-p", "canvas-agent", bin];
   return {
     command: "npx",
-    args: ["-y", bin],
+    args,
     env: {
       CANVAS_API_URL: apiUrl,
       CANVAS_API_TOKEN: token,
