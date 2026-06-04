@@ -564,13 +564,20 @@ function registerWithDesktop(apiUrl: string, token: string): RegisterResult {
     let config: any = {};
     if (existsSync(configPath)) {
       const raw = readFileSync(configPath, "utf-8");
-      try {
-        config = JSON.parse(raw);
-      } catch (e: any) {
-        return {
-          ok: false,
-          error: `Could not parse existing Claude Desktop config: ${e.message}. Fix or delete ${configPath} and try again.`,
-        };
+      // An empty or whitespace-only file is a blank placeholder, not corrupt
+      // JSON — treat it as a fresh config instead of failing with
+      // "Unexpected end of JSON input".
+      if (raw.trim() === "") {
+        config = {};
+      } else {
+        try {
+          config = JSON.parse(raw);
+        } catch (e: any) {
+          return {
+            ok: false,
+            error: `Could not parse existing Claude Desktop config: ${e.message}. Fix or delete ${configPath} and try again.`,
+          };
+        }
       }
     } else {
       // Ensure parent directory exists (Claude Desktop installed but never launched)
@@ -611,13 +618,20 @@ function registerWithAntigravityCli(apiUrl: string, token: string): RegisterResu
     let config: any = {};
     if (existsSync(configPath)) {
       const raw = readFileSync(configPath, "utf-8");
-      try {
-        config = JSON.parse(raw);
-      } catch (e: any) {
-        return {
-          ok: false,
-          error: `Could not parse existing Antigravity config: ${e.message}. Fix or delete ${configPath} and try again.`,
-        };
+      // Antigravity CLI often leaves an empty placeholder mcp_config.json.
+      // An empty or whitespace-only file isn't corrupt — treat it as a fresh
+      // config instead of failing with "Unexpected end of JSON input".
+      if (raw.trim() === "") {
+        config = {};
+      } else {
+        try {
+          config = JSON.parse(raw);
+        } catch (e: any) {
+          return {
+            ok: false,
+            error: `Could not parse existing Antigravity config: ${e.message}. Fix or delete ${configPath} and try again.`,
+          };
+        }
       }
     } else {
       mkdirSync(join(configPath, ".."), { recursive: true });
