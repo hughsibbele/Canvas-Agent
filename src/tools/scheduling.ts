@@ -5,7 +5,7 @@ import { canvas, canvasAll } from "../canvas-client.js";
 export function registerSchedulingCore(server: McpServer) {
   server.tool(
     "update_assignment_dates",
-    "Update due_at, unlock_at, and/or lock_at for a single assignment. Also works for graded discussions and New Quizzes (which are assignments under the hood). Prefer this over update_assignment when you only need to change dates.",
+    "Update due_at, unlock_at, and/or lock_at for a single assignment. Also works for graded discussions and New Quizzes (which are assignments under the hood). Prefer this over update_assignment when you only need to change dates. Only affects the base date: if the assignment has section overrides, students see those instead, and the base is not independently settable — Canvas recomputes it to the latest override time, so an empty string will NOT clear it. Use batch_update_dates with section_dates (or update_assignment_override) for anything with overrides.",
     {
       course_id: z.string().describe("Canvas course ID"),
       assignment_id: z.string().describe("Assignment ID"),
@@ -33,7 +33,7 @@ export function registerSchedulingCore(server: McpServer) {
       let warning = "";
       if (result.has_overrides) {
         warning =
-          "\n⚠️  This assignment has section/student overrides. The base date was updated, but students see their override dates instead. Use list_assignment_overrides + update_assignment_override (or batch_update_dates with section_dates) to change what students actually see.";
+          "\n⚠️  This assignment has section/student overrides, so this call changed nothing students can see. Canvas pins the base date to the latest override time — it ignores what you sent here and an empty string will not clear it. The due_at shown above is Canvas's recomputed value, not your input. To change what students actually see, use batch_update_dates with section_dates, or list_assignment_overrides + update_assignment_override.";
       }
       return {
         content: [
@@ -48,7 +48,7 @@ export function registerSchedulingCore(server: McpServer) {
 
   server.tool(
     "batch_update_dates",
-    "Update dates for multiple assignments at once. Override-aware: if an assignment has section overrides, updates those instead of the (ignored) base date. For assignments with overrides, provide section_dates to set per-section times; if only due_at is given, all overrides get that same time. Provide an array of {assignment_id, due_at, section_dates?, unlock_at, lock_at} objects.",
+    "Update dates for multiple assignments at once, including per-section due times. This is the bulk path for per-section scheduling: for each entry in section_dates it updates that section's override if one exists and CREATES it if one doesn't. Provide an array of {assignment_id, due_at?, section_dates?, unlock_at?, lock_at?} objects. Overrides not named in section_dates fall back to the top-level due_at. IMPORTANT: once an assignment has any override, Canvas ignores its base due date — it recomputes the base to the LATEST override time and will not let you set or clear it independently. So give every section its own section_dates entry rather than leaving one section on the base date.",
     {
       course_id: z.string().describe("Canvas course ID"),
       date_updates: z
@@ -72,7 +72,7 @@ export function registerSchedulingCore(server: McpServer) {
               )
               .optional()
               .describe(
-                "Per-section due dates. Only needed when sections have different times (e.g. different block schedules)."
+                "Per-section dates, used when sections meet at different times (e.g. different block schedules). An override is created for any section that doesn't have one yet. List every section — a section left out keeps whatever date it already had."
               ),
             unlock_at: z.string().optional(),
             lock_at: z.string().optional(),
@@ -84,13 +84,89 @@ export function registerSchedulingCore(server: McpServer) {
       const results: string[] = [];
       for (const { assignment_id, section_dates, ...baseDates } of date_updates) {
         try {
-          // Check if the assignment has overrides
+          const hasBaseDates = Object.values(baseDates).some(
+            (v) => v !== undefined
+          );
+          if (!hasBaseDates && !section_dates?.length) {
+            // Canvas rejects an empty PUT body with a confusing
+            // "assignment is missing" — say what actually went wrong.
+            results.push(
+              `  SKIPPED: ${assignment_id} — no dates supplied (give due_at, section_dates, unlock_at, or lock_at)`
+            );
+            continue;
+          }
+
           const overrides = await canvasAll(
             `/courses/${course_id}/assignments/${assignment_id}/overrides`
           );
+          const bySection = new Map(
+            overrides
+              .filter((o: any) => o.course_section_id != null)
+              .map((o: any) => [String(o.course_section_id), o])
+          );
+          const handled = new Set<number>();
 
-          if (overrides.length === 0) {
-            // No overrides — update the base date directly
+          // Per-section dates: update the section's override, or create it if absent.
+          for (const s of section_dates ?? []) {
+            const dates = {
+              due_at: s.due_at,
+              unlock_at: s.unlock_at,
+              lock_at: s.lock_at,
+            };
+            const existing: any = bySection.get(s.section_id);
+            if (existing) {
+              const updated = await canvas(
+                `/courses/${course_id}/assignments/${assignment_id}/overrides/${existing.id}`,
+                {
+                  method: "PUT",
+                  body: JSON.stringify({ assignment_override: dates }),
+                }
+              );
+              handled.add(existing.id);
+              results.push(
+                `  OK: "${updated.title}" override → due ${updated.due_at ?? "none"}`
+              );
+            } else {
+              const created = await canvas(
+                `/courses/${course_id}/assignments/${assignment_id}/overrides`,
+                {
+                  method: "POST",
+                  body: JSON.stringify({
+                    assignment_override: {
+                      ...dates,
+                      course_section_id: s.section_id,
+                    },
+                  }),
+                }
+              );
+              results.push(
+                `  CREATED: "${created.title}" override → due ${created.due_at ?? "none"}`
+              );
+            }
+          }
+
+          // Overrides not named in section_dates (other sections, student
+          // overrides) fall back to the top-level dates.
+          if (hasBaseDates) {
+            for (const ov of overrides) {
+              if (handled.has(ov.id)) continue;
+              const updated = await canvas(
+                `/courses/${course_id}/assignments/${assignment_id}/overrides/${ov.id}`,
+                {
+                  method: "PUT",
+                  body: JSON.stringify({ assignment_override: baseDates }),
+                }
+              );
+              results.push(
+                `  OK: "${updated.title}" override → due ${updated.due_at ?? "none"}`
+              );
+            }
+          }
+
+          // Only write the base date when the assignment has no overrides at
+          // all. Once any override exists Canvas recomputes the base to the
+          // latest override time, so writing it is a no-op that reads as a bug.
+          if (hasBaseDates && overrides.length === 0 && !section_dates?.length) {
             const result = await canvas(
               `/courses/${course_id}/assignments/${assignment_id}`,
               {
@@ -101,45 +177,6 @@ export function registerSchedulingCore(server: McpServer) {
             results.push(
               `  OK: "${result.name}" → due ${result.due_at ?? "none"}`
             );
-          } else {
-            // Has overrides — update each one
-            const sectionMap = new Map(
-              (section_dates ?? []).map((s) => [s.section_id, s])
-            );
-
-            for (const ov of overrides) {
-              const sectionSpecific = sectionMap.get(
-                String(ov.course_section_id)
-              );
-              const dates = sectionSpecific
-                ? {
-                    due_at: sectionSpecific.due_at,
-                    unlock_at: sectionSpecific.unlock_at,
-                    lock_at: sectionSpecific.lock_at,
-                  }
-                : baseDates;
-
-              const updated = await canvas(
-                `/courses/${course_id}/assignments/${assignment_id}/overrides/${ov.id}`,
-                {
-                  method: "PUT",
-                  body: JSON.stringify({ assignment_override: dates }),
-                }
-              );
-              results.push(
-                `  OK: "${updated.title}" override → due ${updated.due_at ?? "none"}`
-              );
-            }
-            // Also update the base date if provided (for completeness)
-            if (baseDates.due_at) {
-              await canvas(
-                `/courses/${course_id}/assignments/${assignment_id}`,
-                {
-                  method: "PUT",
-                  body: JSON.stringify({ assignment: baseDates }),
-                }
-              );
-            }
           }
         } catch (e: any) {
           results.push(`  FAILED: ${assignment_id} — ${e.message}`);
@@ -158,7 +195,7 @@ export function registerSchedulingCore(server: McpServer) {
 
   server.tool(
     "create_assignment_override",
-    "Create a new date override for a specific section or set of students on an assignment. Use this to set section-specific due dates (e.g., different block start times for different sections).",
+    "Create a new date override for a specific section or set of students on an assignment. SIDE EFFECT: the first override leaves the assignment's base due_at alone, but as soon as a second one exists Canvas overwrites the base with the LATEST override time and will not let you clear it — the 'Everyone else' row permanently mirrors whichever section is due last. That is harmless once every section has its own override (no enrolled student reads the base date), but it makes 'base date for section A + override for section B' an unstable design: give every section an override. To date several sections or many assignments at once, prefer batch_update_dates with section_dates, which creates missing overrides in bulk.",
     {
       course_id: z.string().describe("Canvas course ID"),
       assignment_id: z.string().describe("Assignment ID"),
