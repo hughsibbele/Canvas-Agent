@@ -60,10 +60,30 @@ npm run build
 npm publish
 ```
 
-Then clear the local npx cache so Claude Code picks up the new version:
+Then get the local machine onto the new version. **`npx` prefers a `canvas-agent` binary already on `PATH` over fetching from the registry**, so if the package is installed globally, publishing and clearing the npx cache do nothing — the MCP servers keep running the old global copy, with no visible cause. Check for a global install first:
+
 ```bash
-rm -rf ~/.npm/_npx && /mcp to reconnect
+which -a canvas-agent          # a hit means npx is resolving to it, not the registry
+npm ls -g --depth=0 canvas-agent
 ```
+
+If there is one, upgrading it is the whole job:
+```bash
+npm install -g canvas-agent@latest
+```
+
+If there is *no* global install, npx resolves from the registry and its cache needs clearing instead:
+```bash
+rm -rf ~/.npm/_npx
+```
+
+Either way, finish by asking Hugh to run `/mcp` to reconnect — the running server processes hold the old code until then, and Claude can't trigger the reconnect itself.
+
+To confirm which version is actually being served, don't trust the registry — inspect the copy that resolves:
+```bash
+node -p "require('$(npm root -g)/canvas-agent/package.json').version"
+```
+On Hugh's Mac that path is `/opt/homebrew/lib/node_modules/canvas-agent`; the global install is the one that matters there.
 
 ## Canvas API gotchas
 
