@@ -26,7 +26,7 @@
 
       <p class="section-intro">Canvas Agent works with three different AI assistants &mdash; pick whichever you prefer:</p>
       <ul class="resource-list">
-        <li><strong>Antigravity CLI</strong> &mdash; Google's terminal assistant. The default choice for most teachers because it has a free tier and works with any Google account.</li>
+        <li><strong>Antigravity CLI</strong> &mdash; Google's terminal assistant. The default choice for most teachers &mdash; at EHS it runs on the school's Google Cloud account, so there's nothing to pay for individually. You'll need two short values from Hugh during sign-in (see Step 3).</li>
         <li><strong>Claude Code</strong> &mdash; Anthropic's terminal assistant. Requires a paid Claude plan.</li>
         <li><strong>Claude Desktop</strong> &mdash; Anthropic's point-and-click app. Set up automatically alongside Claude Code if you have both.</li>
       </ul>
@@ -90,8 +90,20 @@
           <div class="step-number">3</div>
           <div class="step-content">
             <h3>Sign in</h3>
-            <p>You'll need a Google account. Antigravity CLI has a free tier, so you don't need a paid plan to get started.</p>
-            <p>A browser window may open to sign in with your Google account &mdash; for some people it authenticates automatically and no popup appears. Next, you'll be asked to pick a <strong>display preference</strong> &mdash; choose whichever looks best to you. You'll also see an <strong>opt-in to data collection</strong>: make sure that is <em>not</em> selected, then click <strong>Done</strong>. When you see a welcome message and a prompt where you can type messages, type <code>/exit</code> to close Antigravity CLI for now &mdash; we'll come back to it in a moment.</p>
+            <p>Before you start, <strong>email Hugh for two values</strong>: the school's Google Cloud <strong>project ID</strong> and its <strong>location</strong>. Antigravity runs on the school's Google Cloud account, and it uses those two values to find your license. The project ID is a machine-style name (something like <code>school-ai-suite</code>, not a plain-English name) and has to match exactly &mdash; copy and paste it rather than typing it.</p>
+            <p>When Antigravity starts for the first time, a browser window opens asking you to sign in. <strong>Use your school Google account</strong>, not a personal Gmail &mdash; the license is tied to the school account. After you sign in, Antigravity shows a <strong>license screen</strong> asking which Google Cloud project carries your license: enter the project ID and location Hugh sent you.</p>
+            <p>Next, you'll be asked to pick a <strong>display preference</strong> &mdash; choose whichever looks best to you. You'll also see an <strong>opt-in to data collection</strong>: make sure that is <em>not</em> selected, then click <strong>Done</strong>. When you see a welcome message and a prompt where you can type messages, type <code>/exit</code> to close Antigravity CLI for now &mdash; we'll come back to it in a moment.</p>
+            <details>
+              <summary>Stuck at the license screen, or seeing "not eligible"?</summary>
+              <div class="details-content">
+                <p>Two causes account for nearly all of these:</p>
+                <ul class="troubleshoot-list">
+                  <li><strong>You signed in with a personal Gmail.</strong> The license only works with your school Google account. Sign out in the browser window, run <code>agy</code> again, and pick the school account this time.</li>
+                  <li><strong>The project ID doesn't match.</strong> One wrong character means no license found. Paste the exact ID from Hugh's email, and double-check the location too.</li>
+                </ul>
+                <p>Still stuck? Send Hugh a screenshot of the screen you're on.</p>
+              </div>
+            </details>
             <details>
               <summary>Using Claude Code instead?</summary>
               <div class="details-content">
@@ -152,6 +164,103 @@
           </div>
         </li>
       </ol>
+    </section>
+
+    <!-- ────────────────────────── GUIDED WORKFLOWS ────────────────────────── -->
+
+    <section class="workflows" id="workflows">
+      <h2>Guided Workflows (Skills)</h2>
+      <p class="section-intro">Once Canvas Agent is connected, you can also install <strong>skills</strong> &mdash; small instruction files your assistant reads before doing a job, so it gets school-specific details right the first time. Two EHS skills are ready to install from the shared <a href="https://github.com/hughsibbele/ai-cli-skills" target="_blank" rel="noopener">ai-cli-skills repository</a>.</p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>EHS-Scheduler</h3>
+          <p>Sets Canvas due dates that match the EHS block schedule &mdash; the right date <em>and</em> the right minute for each block, accounting for Monday vs. long-block times, schedule-override days, no-class days, breaks, and exam periods.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Membean-NRI-updater</h3>
+          <p>Turns your weekly Membean and NoRedInk CSV downloads into Canvas grades &mdash; completion scores, per-student progress comments, missing flags, and late makeups, all shown to you for approval before anything is posted.</p>
+        </div>
+      </div>
+
+      <details>
+        <summary>Installing the skills</summary>
+        <div class="details-content">
+          <p>You install once per computer; after that, updates arrive automatically when you run one update command. Open a terminal and paste these one at a time. (On a Mac, the first command may pop up a window asking to install "command line developer tools" &mdash; click <strong>Install</strong>, let it finish, then run the command again.)</p>
+          <p>First, download the skills:</p>
+          <div class="code-block">
+            <code>git clone https://github.com/hughsibbele/ai-cli-skills.git ~/code/ai-cli-skills</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <p><strong>If you use Antigravity CLI</strong>, link them where Antigravity looks:</p>
+          <div class="code-block">
+            <code>mkdir -p ~/.gemini/config/skills</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <div class="code-block">
+            <code>ln -s ~/code/ai-cli-skills/skills/EHS-Scheduler ~/.gemini/config/skills/EHS-Scheduler</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <div class="code-block">
+            <code>ln -s ~/code/ai-cli-skills/skills/Membean-NRI-updater ~/.gemini/config/skills/Membean-NRI-updater</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <p><strong>If you use Claude Code</strong>, link them where Claude looks instead:</p>
+          <div class="code-block">
+            <code>mkdir -p ~/.claude/skills</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <div class="code-block">
+            <code>ln -s ~/code/ai-cli-skills/skills/EHS-Scheduler ~/.claude/skills/EHS-Scheduler</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <div class="code-block">
+            <code>ln -s ~/code/ai-cli-skills/skills/Membean-NRI-updater ~/.claude/skills/Membean-NRI-updater</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <p>Then start a new session. In Claude Code you can invoke a skill by name (type <code>/EHS-Scheduler</code>); Antigravity picks the right skill automatically from what you ask for.</p>
+          <p><strong>Getting updates later</strong> (new semester calendars, rule fixes) is one command:</p>
+          <div class="code-block">
+            <code>cd ~/code/ai-cli-skills && git pull</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <p>Not comfortable pasting commands? Paste the repository link into your assistant and ask it to install the skills for you &mdash; it knows how.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Using EHS-Scheduler</summary>
+        <div class="details-content">
+          <p>Just ask for due dates in plain language &mdash; the skill figures out which day the block actually meets and what time class starts or ends:</p>
+          <ul class="example-prompts">
+            <li>Set the B-block reading due at the start of class next Thursday</li>
+            <li>My D and G sections both have the lab writeup &mdash; make it due at the end of each section's class on Wednesday</li>
+            <li>Schedule this essay for the week after Thanksgiving break</li>
+          </ul>
+          <p>It will warn you about oddities you might miss &mdash; a Monday running a Friday schedule, a no-class day, an exam week &mdash; and always confirms the exact date and time with you before writing anything to Canvas.</p>
+          <p>The skill carries the full EHS calendar for the current year. When the school publishes next year's calendar, the shared copy gets updated &mdash; you just run the update command above.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Using Membean-NRI-updater</summary>
+        <div class="details-content">
+          <p><strong>One-time Canvas setup.</strong> The skill grades existing assignments, so your course needs them first:</p>
+          <ol class="sub-steps">
+            <li>Two assignment groups &mdash; <strong>Membean</strong> and (FLC only) <strong>NoRedInk</strong> &mdash; each weighted <strong>5%</strong> of the course grade.</li>
+            <li>One <strong>1-point</strong> assignment per week in each group, named exactly <strong>"Membean"</strong> or <strong>"NoRedInk"</strong>, submission type <strong>"No submission"</strong>, due <strong>Sundays at 10:00 PM</strong>.</li>
+          </ol>
+          <p>The fastest way to create a whole semester's worth: ask your assistant. <em>"Create a 1-point no-submission assignment named Membean in the Membean group, due every Sunday at 10 PM from September 6 through December 13."</em></p>
+          <p><strong>Each week:</strong></p>
+          <ol class="sub-steps">
+            <li>Download each class's <strong>report CSV from Membean</strong> and (for FLC) the <strong>gradebook export from NoRedInk</strong> to your Downloads folder.</li>
+            <li>Open your assistant and say <em>"Run the Membean updater."</em></li>
+            <li>It finds the files, matches them to your Canvas courses, checks the completion thresholds, catches NoRedInk makeups from the past month, and shows you <strong>every proposed grade and comment</strong>.</li>
+            <li>Say yes, and it posts everything in one pass &mdash; grades, progress comments, and missing flags.</li>
+          </ol>
+          <p><strong>Make it yours.</strong> The thresholds (30 minutes for FLC, 45 for other courses, 60% accuracy), the 15-weeks-for-full-credit rule, and the comment wording all live in plain text in the skill file &mdash; edit <code>SKILL.md</code> to match your own rules, or ask your assistant to change them for you. If you assign NoRedInk, fill in the topic schedule table in the same file at the start of each semester. Full details are in the <a href="https://github.com/hughsibbele/ai-cli-skills#membean-nri-updater-canvas-setup-and-weekly-routine" target="_blank" rel="noopener">repository README</a>.</p>
+        </div>
+      </details>
     </section>
 
     <!-- ────────────────────────── LEARN MORE ────────────────────────── -->
@@ -258,7 +367,7 @@
         <div class="details-content">
           <p>Canvas Agent itself is <strong>free and open source</strong>. You do need an AI assistant to use it with:</p>
           <ul>
-            <li><strong>Antigravity CLI</strong> &mdash; has a <strong>free tier</strong> that works with Canvas Agent. See <a href="https://antigravity.google/docs/cli-overview" target="_blank" rel="noopener">Google's Antigravity docs</a> for details and paid options.</li>
+            <li><strong>Antigravity CLI</strong> &mdash; at EHS, usage runs on the school's Google Cloud account, so there's nothing for you to pay individually. (At another school, ask whoever manages your Google Cloud account about an Antigravity license.)</li>
             <li><strong>Claude Code / Claude Desktop</strong> &mdash; requires a paid Claude plan (Pro, Team, or Enterprise). See <a href="https://claude.ai/pricing" target="_blank" rel="noopener">claude.ai/pricing</a>.</li>
           </ul>
         </div>
