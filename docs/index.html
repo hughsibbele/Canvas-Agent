@@ -186,45 +186,54 @@
       <details>
         <summary>Installing the skills</summary>
         <div class="details-content">
-          <p>You install once per computer; after that, updates arrive automatically when you run one update command. Open a terminal and paste these one at a time. (On a Mac, the first command may pop up a window asking to install "command line developer tools" &mdash; click <strong>Install</strong>, let it finish, then run the command again.)</p>
+          <p><strong>The easy way (recommended):</strong> let your assistant do it. Open Antigravity or Claude Code and paste this message:</p>
+          <div class="code-block">
+            <code>Please install the skills from https://github.com/hughsibbele/ai-cli-skills by following the Install section of its README. Set them up for the assistant you are.</code>
+            <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+          </div>
+          <p>It will show you each command and ask permission before running it &mdash; approve them, and it will sort out anything unexpected along the way. When it's done, quit and restart your assistant, then type <code>/EHS-Scheduler</code> (Claude Code) or just describe a scheduling task (Antigravity) to confirm the skills are active. <strong>This is also the way to go on Windows</strong>, where the commands below don't apply.</p>
+          <p><strong>Prefer to do it yourself? (Mac)</strong> Paste these into the terminal one at a time. All of them are safe to run more than once.</p>
           <p>First, download the skills:</p>
           <div class="code-block">
             <code>git clone https://github.com/hughsibbele/ai-cli-skills.git ~/code/ai-cli-skills</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
-          <p><strong>If you use Antigravity CLI</strong>, link them where Antigravity looks:</p>
+          <ul class="troubleshoot-list">
+            <li>If a window pops up asking to install <strong>"command line developer tools,"</strong> click <strong>Install</strong>, wait for it to finish (it can take several minutes), then run the command again. On a school-managed Mac this may need the same <strong>Admin On-Demand</strong> step described in Step 1 above.</li>
+            <li>If you see <code>fatal: destination path already exists</code>, the skills are already downloaded &mdash; that's fine, keep going.</li>
+          </ul>
+          <p><strong>If you use Antigravity CLI</strong>, link the skills where Antigravity looks:</p>
           <div class="code-block">
             <code>mkdir -p ~/.gemini/config/skills</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
           <div class="code-block">
-            <code>ln -s ~/code/ai-cli-skills/skills/EHS-Scheduler ~/.gemini/config/skills/EHS-Scheduler</code>
+            <code>ln -sfn ~/code/ai-cli-skills/skills/EHS-Scheduler ~/.gemini/config/skills/EHS-Scheduler</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
           <div class="code-block">
-            <code>ln -s ~/code/ai-cli-skills/skills/Membean-NRI-updater ~/.gemini/config/skills/Membean-NRI-updater</code>
+            <code>ln -sfn ~/code/ai-cli-skills/skills/Membean-NRI-updater ~/.gemini/config/skills/Membean-NRI-updater</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
-          <p><strong>If you use Claude Code</strong>, link them where Claude looks instead:</p>
+          <p><strong>If you use Claude Code</strong>, link them where Claude looks instead (if you use both assistants, run both sets):</p>
           <div class="code-block">
             <code>mkdir -p ~/.claude/skills</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
           <div class="code-block">
-            <code>ln -s ~/code/ai-cli-skills/skills/EHS-Scheduler ~/.claude/skills/EHS-Scheduler</code>
+            <code>ln -sfn ~/code/ai-cli-skills/skills/EHS-Scheduler ~/.claude/skills/EHS-Scheduler</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
           <div class="code-block">
-            <code>ln -s ~/code/ai-cli-skills/skills/Membean-NRI-updater ~/.claude/skills/Membean-NRI-updater</code>
+            <code>ln -sfn ~/code/ai-cli-skills/skills/Membean-NRI-updater ~/.claude/skills/Membean-NRI-updater</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
-          <p>Then start a new session. In Claude Code you can invoke a skill by name (type <code>/EHS-Scheduler</code>); Antigravity picks the right skill automatically from what you ask for.</p>
-          <p><strong>Getting updates later</strong> (new semester calendars, rule fixes) is one command:</p>
+          <p>These commands print nothing when they succeed &mdash; no news is good news. Quit and restart your assistant, then type <code>/EHS-Scheduler</code> (Claude Code) or describe a scheduling task (Antigravity) to confirm.</p>
+          <p><strong>Getting updates later</strong> (new semester calendars, rule fixes) is one command &mdash; or just ask your assistant to "update the EHS skills":</p>
           <div class="code-block">
             <code>cd ~/code/ai-cli-skills && git pull</code>
             <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
           </div>
-          <p>Not comfortable pasting commands? Paste the repository link into your assistant and ask it to install the skills for you &mdash; it knows how.</p>
         </div>
       </details>
 
